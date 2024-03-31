@@ -65,6 +65,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/qt/qt_common_adapters.h"
 #include "styles/style_dialogs.h"
 
+#include <cryptovkr.h>
+
 namespace {
 
 constexpr auto kNewBlockEachMessage = 50;
@@ -427,6 +429,22 @@ not_null<HistoryItem*> History::createItem(
 		if (detachExistingItem) {
 			result->removeMainView();
 		}
+		/*TextWithTags test;
+		test.text = result->originalText().text;
+		QByteArray ba = test.text.toLocal8Bit();
+		const unsigned char* res = (const unsigned char*)ba.data();
+		char* decoded_data = nullptr;
+		decoded_data = fromBase64((unsigned char*)res);
+
+		BYTE* out = nullptr;
+		out = aesDecrypt((BYTE*)decoded_data);
+
+		TextWithEntities resulting_string;
+		resulting_string.text = QString::fromLocal8Bit((char*)out);
+
+		delete[] out;
+		delete[] decoded_data;
+		result->setText(resulting_string);*/
 		return result;
 	}
 	return message.match([&](const auto &data) {
@@ -476,7 +494,27 @@ not_null<HistoryItem*> History::insertItem(
 
 	const auto result = i->get();
 	owner().registerMessage(result);
+	TextWithTags test;
+	test.text = result->originalText().text;
 
+
+	QByteArray ba = test.text.toLocal8Bit();
+	const unsigned char* res = (const unsigned char*)ba.data();
+
+	char* decoded_data = nullptr;
+	decoded_data = fromBase64((unsigned char*)res);
+
+	if (strcmp(decoded_data, (char*)res) == 0) {
+		Ensures(ok);
+		return result;
+	}
+	BYTE* out = nullptr;
+	out = aesDecrypt((BYTE*)decoded_data);
+	TextWithEntities resulting_string;
+	resulting_string.text = QString::fromLocal8Bit((char*)decoded_data);
+	result->setText(resulting_string);
+	delete[] out;
+	delete[] decoded_data;
 	Ensures(ok);
 	return result;
 }

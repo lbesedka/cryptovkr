@@ -10,6 +10,7 @@ init_non_host_target(Telegram)
 add_subdirectory(lib_rpl)
 add_subdirectory(lib_crl)
 add_subdirectory(lib_base)
+add_subdirectory(lib_cryptovkr)
 add_subdirectory(lib_ui)
 add_subdirectory(lib_tl)
 add_subdirectory(lib_spellcheck)
@@ -75,6 +76,7 @@ PRIVATE
     desktop-app::lib_tl
     desktop-app::lib_spellcheck
     desktop-app::lib_storage
+    desktop-app::lib_cryptovkr
     desktop-app::lib_lottie
     desktop-app::lib_qr
     desktop-app::lib_webview
