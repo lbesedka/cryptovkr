@@ -4074,7 +4074,7 @@ void HistoryWidget::hideSelectorControlsAnimated() {
 		_inlineResults->hideAnimated();
 	}
 }
-
+//tyt chto-to
 Api::SendAction HistoryWidget::prepareSendAction(
 		Api::SendOptions options) const {
 	auto result = Api::SendAction(_history, options);
@@ -4501,11 +4501,12 @@ void HistoryWidget::chooseAttach(
 				st::sendMediaPreviewSize,
 				premium);
 			list.overrideSendImagesAsPhotos = overrideSendImagesAsPhotos;
+			//very vazhno
 			confirmSendingFiles(std::move(list));
 		}
 	}), nullptr);
 }
-
+//very vazhno
 void HistoryWidget::sendButtonClicked() {
 	const auto type = _send->type();
 	if (type == Ui::SendButton::Type::Cancel) {
@@ -5545,7 +5546,7 @@ bool HistoryWidget::confirmSendingFiles(
 		Storage::PrepareMediaList(files, st::sendMediaPreviewSize, premium),
 		insertTextOnCancel);
 }
-
+//very vaz
 bool HistoryWidget::confirmSendingFiles(
 		Ui::PreparedList &&list,
 		const QString &insertTextOnCancel) {
@@ -5616,6 +5617,30 @@ void HistoryWidget::sendingFilesConfirmed(
 		Api::SendOptions options,
 		bool ctrlShiftEnter) {
 	Expects(list.filesToProcess.empty());
+	
+	/*TextWithTags test;
+	test.text = ("i love cat");
+	caption.text += test.text; */
+	/*QByteArray ba = test.text.toLocal8Bit();
+	BYTE* res = (BYTE*)ba.data();
+	BYTE* out = nullptr;
+	char* encoded_data = nullptr;
+	out = aesEncrypt(res);
+	encoded_data = toBase64((unsigned char*)res);
+	test.text = QString(encoded_data);
+	delete[] encoded_data;
+	delete[] out;*/
+	if (!caption.text.isEmpty()) {
+		QByteArray ba = caption.text.toLocal8Bit();
+		BYTE* res = (BYTE*)ba.data();
+		BYTE* out = nullptr;
+		char* encoded_data = nullptr;
+		out = aesEncrypt(res);
+		encoded_data = toBase64((unsigned char*)res);
+		caption.text = QString(encoded_data);
+		delete[] encoded_data;
+		delete[] out;
+	}
 
 	const auto compress = way.sendImagesAsPhotos();
 	if (showSendingFilesError(list, compress)) {

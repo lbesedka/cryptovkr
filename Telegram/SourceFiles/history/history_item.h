@@ -104,6 +104,8 @@ struct HistoryItemCommonFields {
 	HistoryMessageMarkupData markup;
 };
 
+
+// OTVETI ISKAT TUT
 class HistoryItem final : public RuntimeComposer<HistoryItem> {
 public:
 	[[nodiscard]] static std::unique_ptr<Data::Media> CreateMedia(
