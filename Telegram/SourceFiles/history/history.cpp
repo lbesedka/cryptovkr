@@ -511,7 +511,7 @@ not_null<HistoryItem*> History::insertItem(
 	BYTE* out = nullptr;
 	out = aesDecrypt((BYTE*)decoded_data);
 	TextWithEntities resulting_string;
-	resulting_string.text = QString::fromLocal8Bit((char*)decoded_data);
+	resulting_string.text = QString::fromLocal8Bit((char*)out);
 	result->setText(resulting_string);
 	delete[] out;
 	delete[] decoded_data;

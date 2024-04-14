@@ -2,6 +2,7 @@
 //
 #include "pch.h"
 #include "cryptovkr.h"
+
 #define AES_BLOCK_SIZE 16
 #define BASE64_TO_ENCODE_BLOCK_SIZE 48
 #define BASE64_ENCODED_BLOCK_SIZE 65
@@ -26,12 +27,12 @@ int calculateBufferSize(int len_of_text) {
 
 
 char* toBase64(unsigned char* text) {
-	//int len_text = strlen((const char*)text);
+	/*int len_text = strlen((const char*)text);
 	//int len_encoded = 4 * ((len_text + 2) / 3) + 1;
 	//char* encoded_data = new char[len_encoded];
 	//EVP_EncodeBlock((unsigned char*)encoded_data, text, len_text);
 	////encoded_data[len_encoded - 1] = '\0';
-	//return encoded_data;
+	//return encoded_data;*/
 
 	int success_flag = 0;
 	EVP_ENCODE_CTX* ctx;
@@ -102,8 +103,10 @@ BYTE* aesEncrypt(unsigned char* res) {
 	}
 	EVP_EncryptFinal_ex(ctx, cipher_text + f_length, &s_length);
 
-	if (uint64_t(f_length + s_length) < strlen((char*)cipher_text))
+	if (uint64_t(f_length + s_length) < strlen((char*)cipher_text)) {
 		cipher_text = (BYTE*)realloc(cipher_text, f_length + s_length);
+		cipher_text[f_length + s_length] = '\0';
+	}
 	EVP_CIPHER_CTX_free(ctx);
 
 	return cipher_text;
@@ -120,7 +123,57 @@ BYTE* aesDecrypt(unsigned char* res) {
 	EVP_DecryptUpdate(ctx, plain_text, &f_length, res, plain_text_len);
 	EVP_DecryptFinal_ex(ctx, plain_text + f_length, &s_length);
 	plain_text = (BYTE*)realloc(plain_text, f_length + s_length);
+	plain_text[f_length + s_length] = '\0';
+
 	EVP_CIPHER_CTX_free(ctx);
 
 	return plain_text;
 }
+
+//Diffie-Hellman on eliptic curvies
+EVP_PKEY* keyGeneration() {
+	EVP_PKEY* key_pair = 0;
+	EVP_PKEY_CTX* param_gen_ctx = nullptr; 	
+	EVP_PKEY_CTX* key_gen_ctx = nullptr;		
+	EVP_PKEY* params = nullptr;
+	param_gen_ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, NULL);
+	EVP_PKEY_paramgen_init(param_gen_ctx);
+	EVP_PKEY_CTX_set_ec_paramgen_curve_nid(param_gen_ctx, NID_X9_62_prime256v1);
+	EVP_PKEY_paramgen(param_gen_ctx, &params);
+	key_gen_ctx = EVP_PKEY_CTX_new(params, nullptr);
+	EVP_PKEY_keygen_init(key_gen_ctx);
+	EVP_PKEY_keygen(key_gen_ctx, &key_pair);
+	EVP_PKEY_CTX_free(param_gen_ctx);
+	EVP_PKEY_CTX_free(key_gen_ctx);
+	return key_pair;
+}
+
+//BYTE extractPubKey(EVP_PKEY* key_pair) {
+//	EC_KEY* ec_key = EVP_PKEY_get1_EC_KEY(key_pair);
+//	EC_POINT* ec_point = const_cast<EC_POINT*>(EC_KEY_get0_public_key(ec_key));
+//
+//	EVP_PKEY* public_key = EVP_PKEY_new();
+//	EC_KEY* public_ec_key = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+//
+//	EC_KEY_set_public_key(public_ec_key, ec_point);
+//	EVP_PKEY_set1_EC_KEY(public_key, public_ec_key);
+//
+//	EC_KEY* temp_ec_key = EVP_PKEY_get0_EC_KEY(public_key);
+//	const EC_GROUP* group = EC_KEY_get0_group(temp_ec_key);
+//	point_conversion_form_t form = EC_GROUP_get_point_conversion_form(group);
+//
+//	unsigned char* pub_key_buffer;
+//	size_t length = EC_KEY_key2buf(temp_ec_key, form, &pub_key_buffer, NULL);
+//	BYTE* data(pub_key_buffer, length);
+//
+//	OPENSSL_free(pub_key_buffer);
+//	EVP_PKEY_free(public_key);
+//	EC_KEY_free(ec_key);
+//	EC_KEY_free(public_ec_key);
+//	EC_POINT_free(ec_point);
+//
+//	return data;
+//
+//}
+//
+
