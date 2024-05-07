@@ -17,6 +17,10 @@ unsigned char init_vector[16] = {
 		0x61,0x73,0x61,0x73,0x64,0x61,0x73,0x63,0x6c,0x61,0x6e,0x6f,0x76,0x69,0x63,0x68
 };
 
+DF::Roles current_role = DF::Roles::Uninitialised;
+
+DF::States current_state = DF::States::WaitingForInit;
+
 int calculateBufferSize(int len_of_text) {
 	int whole_blocks = std::floor((len_of_text / BASE64_TO_ENCODE_BLOCK_SIZE));
 	int partial_block_size = len_of_text % BASE64_TO_ENCODE_BLOCK_SIZE;
@@ -112,6 +116,36 @@ BYTE* aesEncrypt(unsigned char* res) {
 	return cipher_text;
 }
 
+BYTE* aesEncrypt(unsigned char* res, size_t size_of_plain_text) {
+	EVP_CIPHER_CTX* ctx;
+	ctx = EVP_CIPHER_CTX_new();
+	int plain_text_len = size_of_plain_text;
+	int cipher_text_block_size = plain_text_len % AES_BLOCK_SIZE == 0 ? plain_text_len : (plain_text_len / AES_BLOCK_SIZE + 1) * AES_BLOCK_SIZE;
+
+	BYTE* cipher_text = new BYTE[cipher_text_block_size];
+
+	EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, key, init_vector);
+
+	int f_length, s_length;
+	EVP_EncryptUpdate(ctx, cipher_text, &f_length, res, plain_text_len);
+
+	if (f_length == strlen((char*)cipher_text))
+	{
+		BYTE* tmp_ptr = nullptr;
+		cipher_text = (BYTE*)realloc(cipher_text, cipher_text_block_size + AES_BLOCK_SIZE);
+		tmp_ptr = cipher_text + cipher_text_block_size;
+		memset(tmp_ptr, 0, AES_BLOCK_SIZE);
+	}
+	EVP_EncryptFinal_ex(ctx, cipher_text + f_length, &s_length);
+
+	if (uint64_t(f_length + s_length) < strlen((char*)cipher_text)) {
+		cipher_text = (BYTE*)realloc(cipher_text, f_length + s_length);
+		cipher_text[f_length + s_length] = '\0';
+	}
+	EVP_CIPHER_CTX_free(ctx);
+
+	return cipher_text;
+}
 
 BYTE* aesDecrypt(unsigned char* res) {
 	int plain_text_len = strlen((char*)res);
@@ -130,50 +164,186 @@ BYTE* aesDecrypt(unsigned char* res) {
 	return plain_text;
 }
 
-//Diffie-Hellman on eliptic curvies
-EVP_PKEY* keyGeneration() {
-	EVP_PKEY* key_pair = 0;
-	EVP_PKEY_CTX* param_gen_ctx = nullptr; 	
-	EVP_PKEY_CTX* key_gen_ctx = nullptr;		
-	EVP_PKEY* params = nullptr;
-	param_gen_ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, NULL);
-	EVP_PKEY_paramgen_init(param_gen_ctx);
-	EVP_PKEY_CTX_set_ec_paramgen_curve_nid(param_gen_ctx, NID_X9_62_prime256v1);
-	EVP_PKEY_paramgen(param_gen_ctx, &params);
-	key_gen_ctx = EVP_PKEY_CTX_new(params, nullptr);
-	EVP_PKEY_keygen_init(key_gen_ctx);
-	EVP_PKEY_keygen(key_gen_ctx, &key_pair);
-	EVP_PKEY_CTX_free(param_gen_ctx);
-	EVP_PKEY_CTX_free(key_gen_ctx);
-	return key_pair;
+void aesDecrypt_inplace(BYTE* res, size_t size_of_plain_text) {
+	BYTE* plain_text = new BYTE[size_of_plain_text];
+	EVP_CIPHER_CTX* ctx;
+	ctx = EVP_CIPHER_CTX_new();
+	EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, init_vector);
+	int f_length, s_length;
+	EVP_DecryptUpdate(ctx, plain_text, &f_length, res, size_of_plain_text);
+	EVP_DecryptFinal_ex(ctx, plain_text + f_length, &s_length);
+	plain_text = (BYTE*)realloc(plain_text, f_length + s_length);
+	plain_text[f_length + s_length] = '\0';
+
+	EVP_CIPHER_CTX_free(ctx);
+	memcpy(res, plain_text, f_length + s_length);
 }
 
-//BYTE extractPubKey(EVP_PKEY* key_pair) {
-//	EC_KEY* ec_key = EVP_PKEY_get1_EC_KEY(key_pair);
-//	EC_POINT* ec_point = const_cast<EC_POINT*>(EC_KEY_get0_public_key(ec_key));
-//
-//	EVP_PKEY* public_key = EVP_PKEY_new();
-//	EC_KEY* public_ec_key = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
-//
-//	EC_KEY_set_public_key(public_ec_key, ec_point);
-//	EVP_PKEY_set1_EC_KEY(public_key, public_ec_key);
-//
-//	EC_KEY* temp_ec_key = EVP_PKEY_get0_EC_KEY(public_key);
-//	const EC_GROUP* group = EC_KEY_get0_group(temp_ec_key);
-//	point_conversion_form_t form = EC_GROUP_get_point_conversion_form(group);
-//
-//	unsigned char* pub_key_buffer;
-//	size_t length = EC_KEY_key2buf(temp_ec_key, form, &pub_key_buffer, NULL);
-//	BYTE* data(pub_key_buffer, length);
-//
-//	OPENSSL_free(pub_key_buffer);
-//	EVP_PKEY_free(public_key);
-//	EC_KEY_free(ec_key);
-//	EC_KEY_free(public_ec_key);
-//	EC_POINT_free(ec_point);
-//
-//	return data;
-//
-//}
-//
+void aesEncrypt_inplace(BYTE* res, size_t size_of_plain_text) {
+	EVP_CIPHER_CTX* ctx;
+	ctx = EVP_CIPHER_CTX_new();
+	int plain_text_len = size_of_plain_text;
+	int cipher_text_block_size = plain_text_len % AES_BLOCK_SIZE == 0 ? plain_text_len : (plain_text_len / AES_BLOCK_SIZE + 1) * AES_BLOCK_SIZE;
+
+	BYTE* cipher_text = new BYTE[cipher_text_block_size];
+
+	EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, key, init_vector);
+
+	int f_length, s_length;
+	EVP_EncryptUpdate(ctx, cipher_text, &f_length, (BYTE*)res, plain_text_len);
+
+	if (f_length == strlen((char*)cipher_text))
+	{
+		BYTE* tmp_ptr = nullptr;
+		cipher_text = (BYTE*)realloc(cipher_text, cipher_text_block_size + AES_BLOCK_SIZE);
+		tmp_ptr = cipher_text + cipher_text_block_size;
+		memset(tmp_ptr, 0, AES_BLOCK_SIZE);
+	}
+	EVP_EncryptFinal_ex(ctx, cipher_text + f_length, &s_length);
+
+	if (uint64_t(f_length + s_length) < strlen((char*)cipher_text)) {
+		cipher_text = (BYTE*)realloc(cipher_text, f_length + s_length);
+		cipher_text[f_length + s_length] = '\0';
+	}
+	EVP_CIPHER_CTX_free(ctx);
+
+	memcpy(res, cipher_text, f_length + s_length);
+	//delete[] cipher_text;
+}
+
+bool isServiceMessage(std::string message) {
+	std::string header = message.substr(0, 8);
+	if (header == "SERVICE_|")
+		return 1;
+	else
+		return 0;
+}
+
+int examineServiceMessage(std::string message) {
+	if (!isServiceMessage(message))
+		return 0;
+	std::string payload = message.substr(9, 8);
+	if (payload.find("DH INIT_") != std::string::npos) {
+		if (current_state != DF::States::WaitingForInit)
+			return 0;
+		else {
+			/*send message DH ACC__*/
+			current_state = DF::States::WaitingForGPA;
+			current_role = DF::Roles::Bob;
+			return 1;
+		}
+	}
+	else if (payload.find("DH ACC__")) {
+		if (current_state != DF::States::WaitingForInit || current_role == DF::Roles::Bob)
+			return 0;
+		else {
+			current_state = DF::States::WaitingForB;
+			/*generate_pga()*/
+			/*send p*/
+			/*send g*/
+			/*send a*/
+			return 1;
+		}
+	}
+	else if (payload.find("PGA NUM_")) {
+		if (current_state != DF::States::WaitingForGPA || current_role == DF::Roles::Alice)
+			return 0;
+		else {
+			/*generate b*/
+			/*send b*/
+			/*get K*/
+			return 1;
+		}
+		
+	}
+	else if (payload.find("B NUM___")) {
+		if (current_state != DF::States::WaitingForB || current_role == DF::Roles::Bob)
+			return 0;
+		else {
+			/*get K*/
+			return 1;
+		}
+	}
+	else if (payload.find("DF END__")) {
+		if (current_state != DF::States::KeyValid)
+			return 0;
+		else {
+			/*obnulyai counter*/
+			return 1;
+		}
+	}
+	else {
+		return 0;
+	}
+}
+
+
+std::tuple<BIGNUM*, BIGNUM*, BIGNUM*, BIGNUM*> generate_DH_parameters() {
+	BIGNUM* big_add = BN_new();
+	BIGNUM* big_rem = BN_new();
+
+	BN_set_word(big_add, 24);
+	BN_set_word(big_rem, 23);
+
+	int priv_len = 2 * 112;
+	OSSL_PARAM params[3];
+	BIGNUM* prime;
+	BIGNUM* generator;
+	EVP_PKEY* pkey = NULL;
+
+	prime = BN_new();
+	generator = BN_new();
+	BN_set_word(big_add, 24);
+	BN_set_word(big_rem, 23);
+
+
+	EVP_PKEY_CTX* pctx = EVP_PKEY_CTX_new_from_name(NULL, "DH", NULL);
+
+	params[0] = OSSL_PARAM_construct_utf8_string("group", (char*)"ffdhe2048", 0);
+	/* "priv_len" is optional */
+	params[1] = OSSL_PARAM_construct_int("priv_len", &priv_len);
+	params[2] = OSSL_PARAM_construct_end();
+
+	EVP_PKEY_keygen_init(pctx);
+	EVP_PKEY_CTX_set_params(pctx, params);
+	EVP_PKEY_generate(pctx, &pkey);
+
+	EVP_PKEY_get_bn_param(pkey, OSSL_PKEY_PARAM_FFC_P, &prime);
+	EVP_PKEY_get_bn_param(pkey, OSSL_PKEY_PARAM_FFC_G, &generator);
+
+	OSSL_PARAM_BLD* paramBuild = OSSL_PARAM_BLD_new();
+
+	// Set the prime and generator.
+	OSSL_PARAM_BLD_push_BN(paramBuild, OSSL_PKEY_PARAM_FFC_P, prime);
+	OSSL_PARAM_BLD_push_BN(paramBuild, OSSL_PKEY_PARAM_FFC_G, generator);
+	// Convert to OSSL_PARAM.
+	OSSL_PARAM* param = OSSL_PARAM_BLD_to_param(paramBuild);
+
+	// Create the context. The name is DHX not DH!!!
+	EVP_PKEY_CTX* domainParamKeyCtx = EVP_PKEY_CTX_new_from_name(nullptr, "DHX", nullptr);
+
+	// Initialize the context.
+	EVP_PKEY_fromdata_init(domainParamKeyCtx);
+	// Create the domain parameter key.
+	EVP_PKEY* domainParamKey = nullptr;
+	EVP_PKEY_fromdata(domainParamKeyCtx, &domainParamKey, EVP_PKEY_KEY_PARAMETERS, param);
+
+	EVP_PKEY_CTX* keyGenerationCtx = EVP_PKEY_CTX_new_from_pkey(nullptr, domainParamKey, nullptr);
+
+	EVP_PKEY_keygen_init(keyGenerationCtx);
+	EVP_PKEY* keyPair = nullptr;
+	EVP_PKEY_generate(keyGenerationCtx, &keyPair);
+	
+	BIGNUM* publicKey = nullptr;
+	EVP_PKEY_get_bn_param(keyPair, OSSL_PKEY_PARAM_PUB_KEY, &publicKey);
+
+	BIGNUM* privateKey = nullptr;
+	EVP_PKEY_get_bn_param(keyPair, OSSL_PKEY_PARAM_PRIV_KEY, &privateKey);
+
+
+	std::tuple<BIGNUM*, BIGNUM*, BIGNUM*, BIGNUM*> tup = { publicKey, privateKey, prime, generator };
+	return tup;
+	
+}
+
 
