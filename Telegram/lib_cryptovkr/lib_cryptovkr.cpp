@@ -300,7 +300,6 @@ std::tuple<BIGNUM*, BIGNUM*, BIGNUM*, BIGNUM*> generate_DH_parameters() {
 	EVP_PKEY_CTX* pctx = EVP_PKEY_CTX_new_from_name(NULL, "DH", NULL);
 
 	params[0] = OSSL_PARAM_construct_utf8_string("group", (char*)"ffdhe2048", 0);
-	/* "priv_len" is optional */
 	params[1] = OSSL_PARAM_construct_int("priv_len", &priv_len);
 	params[2] = OSSL_PARAM_construct_end();
 
@@ -340,6 +339,11 @@ std::tuple<BIGNUM*, BIGNUM*, BIGNUM*, BIGNUM*> generate_DH_parameters() {
 	BIGNUM* privateKey = nullptr;
 	EVP_PKEY_get_bn_param(keyPair, OSSL_PKEY_PARAM_PRIV_KEY, &privateKey);
 
+	EVP_PKEY_CTX_free(pctx);
+	EVP_PKEY_CTX_free(domainParamKeyCtx);
+	EVP_PKEY_CTX_free(keyGenerationCtx);
+
+
 
 	std::tuple<BIGNUM*, BIGNUM*, BIGNUM*, BIGNUM*> tup = { publicKey, privateKey, prime, generator };
 	return tup;
@@ -347,3 +351,109 @@ std::tuple<BIGNUM*, BIGNUM*, BIGNUM*, BIGNUM*> generate_DH_parameters() {
 }
 
 
+
+
+std::tuple<EVP_PKEY*, EVP_PKEY*, BIGNUM*, BIGNUM*> generate_DH_parameters2() {
+	BIGNUM* big_add = BN_new();
+	BIGNUM* big_rem = BN_new();
+
+	BN_set_word(big_add, 24);
+	BN_set_word(big_rem, 23);
+
+	int priv_len = 2 * 112;
+	OSSL_PARAM params[3];
+	BIGNUM* prime;
+	BIGNUM* generator;
+	EVP_PKEY* pkey = NULL;
+
+	prime = BN_new();
+	generator = BN_new();
+	BN_set_word(big_add, 24);
+	BN_set_word(big_rem, 23);
+
+
+	EVP_PKEY_CTX* pctx = EVP_PKEY_CTX_new_from_name(NULL, "DH", NULL);
+
+	params[0] = OSSL_PARAM_construct_utf8_string("group", (char*)"ffdhe2048", 0);
+	params[1] = OSSL_PARAM_construct_int("priv_len", &priv_len);
+	params[2] = OSSL_PARAM_construct_end();
+
+	EVP_PKEY_keygen_init(pctx);
+	EVP_PKEY_CTX_set_params(pctx, params);
+	EVP_PKEY_generate(pctx, &pkey);
+
+	EVP_PKEY_get_bn_param(pkey, OSSL_PKEY_PARAM_FFC_P, &prime);
+	EVP_PKEY_get_bn_param(pkey, OSSL_PKEY_PARAM_FFC_G, &generator);
+
+	OSSL_PARAM_BLD* paramBuild = OSSL_PARAM_BLD_new();
+
+	// Set the prime and generator.
+	OSSL_PARAM_BLD_push_BN(paramBuild, OSSL_PKEY_PARAM_FFC_P, prime);
+	OSSL_PARAM_BLD_push_BN(paramBuild, OSSL_PKEY_PARAM_FFC_G, generator);
+	// Convert to OSSL_PARAM.
+	OSSL_PARAM* param = OSSL_PARAM_BLD_to_param(paramBuild);
+
+	// Create the context. The name is DHX not DH!!!
+	EVP_PKEY_CTX* domainParamKeyCtx = EVP_PKEY_CTX_new_from_name(nullptr, "DHX", nullptr);
+
+	// Initialize the context.
+	EVP_PKEY_fromdata_init(domainParamKeyCtx);
+	// Create the domain parameter key.
+	EVP_PKEY* domainParamKey = nullptr;
+	EVP_PKEY_fromdata(domainParamKeyCtx, &domainParamKey, EVP_PKEY_KEY_PARAMETERS, param);
+
+	EVP_PKEY_CTX* keyGenerationCtx = EVP_PKEY_CTX_new_from_pkey(nullptr, domainParamKey, nullptr);
+
+	EVP_PKEY_keygen_init(keyGenerationCtx);
+	EVP_PKEY* keyPair = nullptr;
+	EVP_PKEY_generate(keyGenerationCtx, &keyPair);
+
+	EVP_PKEY* publicKey = nullptr;
+	EVP_PKEY_keygen(keyGenerationCtx, &publicKey);
+
+	EVP_PKEY* privateKey = nullptr;
+	EVP_PKEY_keygen(keyGenerationCtx, &privateKey);
+
+	EVP_PKEY_CTX_free(pctx);
+	EVP_PKEY_CTX_free(domainParamKeyCtx);
+	EVP_PKEY_CTX_free(keyGenerationCtx);
+
+
+
+	std::tuple<EVP_PKEY*, EVP_PKEY*, BIGNUM*, BIGNUM*> tup = { publicKey, privateKey, prime, generator };
+	return tup;
+
+}
+
+
+
+
+
+unsigned char* generateSharedKey(EVP_PKEY* publicKey, EVP_PKEY* privateKey, BIGNUM* prime, BIGNUM* generator) {
+	//EVP_PKEY* peerPublicKey;
+
+	////CreatePeerPublicKey
+	//OSSL_PARAM_BLD* paramBuild = OSSL_PARAM_BLD_new(); 
+	//OSSL_PARAM_BLD_push_BN(paramBuild, OSSL_PKEY_PARAM_PUB_KEY, publicKey);
+	//OSSL_PARAM_BLD_push_BN(paramBuild, OSSL_PKEY_PARAM_FFC_P, prime);
+	//OSSL_PARAM_BLD_push_BN(paramBuild, OSSL_PKEY_PARAM_FFC_G, generator); 
+	//OSSL_PARAM* param = OSSL_PARAM_BLD_to_param(paramBuild);
+	//EVP_PKEY_CTX* peerPublicKeyCtx = EVP_PKEY_CTX_new_from_name(nullptr, "DHX", nullptr); 
+	//EVP_PKEY_fromdata_init(peerPublicKeyCtx);
+	//EVP_PKEY* peerPubKey = nullptr;
+	//EVP_PKEY_fromdata(peerPublicKeyCtx, &peerPubKey, EVP_PKEY_PUBLIC_KEY, param);
+	OSSL_PARAM_BLD * paramBuild = OSSL_PARAM_BLD_new();
+	OSSL_PARAM_BLD_push_BN(paramBuild, OSSL_PKEY_PARAM_FFC_P, prime);
+	OSSL_PARAM_BLD_push_BN(paramBuild, OSSL_PKEY_PARAM_FFC_G, generator); 
+	OSSL_PARAM* param = OSSL_PARAM_BLD_to_param(paramBuild);
+	EVP_PKEY_CTX* kctx = EVP_PKEY_CTX_new(publicKey, NULL);
+	EVP_PKEY_derive_init_ex(kctx, param);
+	EVP_PKEY_derive_set_peer(kctx, privateKey);
+	size_t shared_key_len;
+	unsigned char* shared_key = NULL;
+	EVP_PKEY_derive(kctx, NULL, &shared_key_len);
+	shared_key = (unsigned char*)OPENSSL_malloc(shared_key_len);
+	EVP_PKEY_derive(kctx, shared_key, &shared_key_len);
+	EVP_PKEY_CTX_free(kctx);
+	return shared_key; 
+}

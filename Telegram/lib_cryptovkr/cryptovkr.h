@@ -52,3 +52,5 @@ void aesDecrypt_inplace(BYTE* res, size_t size_of_plain_text);
 bool isServiceMessage(std::string message);
 int examineServiceMessage(std::string message);
 std::tuple<BIGNUM*, BIGNUM*, BIGNUM*, BIGNUM*> generate_DH_parameters();
+std::tuple<EVP_PKEY*, EVP_PKEY*, BIGNUM*, BIGNUM*> generate_DH_parameters2();
+unsigned char* generateSharedKey(EVP_PKEY* publicKey, EVP_PKEY* privateKey, BIGNUM* prime, BIGNUM* generator);
