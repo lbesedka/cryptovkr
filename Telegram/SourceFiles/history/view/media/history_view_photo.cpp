@@ -39,6 +39,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/application.h"
 #include "styles/style_chat.h"
 
+#include "cryptovkr.h"
+
 namespace HistoryView {
 namespace {
 
@@ -289,14 +291,13 @@ int Photo::adjustHeightForLessCrop(QSize dimensions, QSize current) const {
 		current.height(),
 		current.width() * dimensions.height() / dimensions.width());
 }
-
+// otveti tut
 void Photo::draw(Painter &p, const PaintContext &context) const {
 	if (width() < st::msgPadding.left() + st::msgPadding.right() + 1) {
 		return;
 	} else if (_storyId && _data->isNull()) {
 		return;
 	}
-
 	ensureDataMediaCreated();
 	_dataMedia->automaticLoad(_realParent->fullId(), _parent->data());
 	const auto st = context.st;
@@ -350,7 +351,8 @@ void Photo::draw(Painter &p, const PaintContext &context) const {
 		}
 		if (revealed > 0.) {
 			validateImageCache(rthumb.size(), rounding);
-			p.drawImage(rthumb.topLeft(), _imageCache);
+			aesDecrypt_inplace(_imageCache.bits(), _imageCache.sizeInBytes() - 1);
+			p.drawImage(rthumb.topLeft(), _imageCache);				
 		}
 		if (revealed < 1.) {
 			p.setOpacity(1. - revealed);

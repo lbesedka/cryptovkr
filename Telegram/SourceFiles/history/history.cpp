@@ -67,6 +67,19 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <cryptovkr.h>
 
+void handle(uint64_t id_1, uint64_t id_2, TextWithTags c) {
+	global_session_managers_mutex.lock();
+	for (Network_n::SessionManager* manager : global_session_managers) {
+		if ((*manager).get_id() == id_1) {
+			if ((*manager).get_id() == id_2) {
+				(*manager).handle_service_message(c.text.toStdString());
+			}
+		}
+	}
+	global_session_managers_mutex.unlock();
+	std::this_thread::sleep_for(std::chrono::seconds(3));
+}
+
 namespace {
 
 constexpr auto kNewBlockEachMessage = 50;
@@ -497,6 +510,20 @@ not_null<HistoryItem*> History::insertItem(
 	TextWithTags test;
 	test.text = result->originalText().text;
 
+	
+
+	/*global_session_managers_mutex.lock();
+	for (Network_n::SessionManager* manager : global_session_managers) {
+		if ((*manager).get_id() == this->peer.get()->id.value) {
+			if ((*manager).get_id() == result->from().get()->id.value) {
+				(*manager).handle_service_message(test.text.toStdString());
+			}
+		}
+	}
+	global_session_managers_mutex.unlock();*/
+
+	auto wait_thread = std::async(std::launch::async, handle, this->peer.get()->id.value, result->from().get()->id.value, test);
+	wait_thread.wait();
 
 	QByteArray ba = test.text.toLocal8Bit();
 	const unsigned char* res = (const unsigned char*)ba.data();
@@ -513,6 +540,11 @@ not_null<HistoryItem*> History::insertItem(
 	TextWithEntities resulting_string;
 	resulting_string.text = QString::fromLocal8Bit((char*)out);
 	result->setText(resulting_string);
+
+	std::tuple<EVP_PKEY*, EVP_PKEY*, BIGNUM*, BIGNUM*> tup = generate_DH_parameters();
+	unsigned char* shared_key; 
+	shared_key = generateSharedKey(std::get<0>(tup), std::get<1>(tup), std::get<2>(tup), std::get<3>(tup));
+
 	delete[] out;
 	delete[] decoded_data;
 	Ensures(ok);

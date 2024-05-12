@@ -12,6 +12,7 @@ get_filename_component(src_loc . REALPATH)
 
 target_precompile_headers(lib_cryptovkr PRIVATE ${src_loc}/pch.h)
 
+
 target_include_directories(lib_cryptovkr
 PUBLIC
     ${src_loc}

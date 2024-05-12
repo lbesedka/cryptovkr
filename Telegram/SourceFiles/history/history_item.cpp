@@ -253,6 +253,7 @@ std::unique_ptr<Data::Media> HistoryItem::CreateMedia(
 				"without photo and without ttl_seconds."));
 			return nullptr;
 		}
+		//asasdas
 		return photo->match([&](const MTPDphoto &photo) -> Result {
 			return std::make_unique<Data::MediaPhoto>(
 				item,

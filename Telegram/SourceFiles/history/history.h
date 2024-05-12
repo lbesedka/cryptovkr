@@ -15,6 +15,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/variant.h"
 #include "base/flat_set.h"
 #include "base/flags.h"
+#include "cryptovkr.h"
 
 class History;
 class HistoryBlock;

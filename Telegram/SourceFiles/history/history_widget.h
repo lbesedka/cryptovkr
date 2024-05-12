@@ -18,6 +18,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/fields/input_field.h"
 #include "mtproto/sender.h"
 
+#include <thread>
+#include <future>
+#include "cryptovkr.h"
+
 struct FileLoadResult;
 enum class SendMediaType;
 class MessageLinksParser;
@@ -107,6 +111,7 @@ class CharactersLimitLabel;
 
 class BotKeyboard;
 class HistoryInner;
+
 
 class HistoryWidget final
 	: public Window::AbstractSectionWidget
@@ -296,6 +301,12 @@ public:
 
 	void tryProcessKeyInput(not_null<QKeyEvent*> e);
 
+
+	void send(Api::SendOptions options, std::string new_message = "");
+	void setHistory(History* history);
+
+
+
 	~HistoryWidget();
 
 protected:
@@ -391,7 +402,6 @@ private:
 
 	[[nodiscard]] Api::SendAction prepareSendAction(
 		Api::SendOptions options) const;
-	void send(Api::SendOptions options);
 	void sendWithModifiers(Qt::KeyboardModifiers modifiers);
 	void sendSilent();
 	void sendScheduled();
@@ -596,7 +606,6 @@ private:
 
 	void unregisterDraftSources();
 	void registerDraftSource();
-	void setHistory(History *history);
 	void setEditMsgId(MsgId msgId);
 
 	HistoryItem *getItemFromHistoryOrMigrated(MsgId genericMsgId) const;
@@ -838,3 +847,5 @@ private:
 	rpl::event_stream<> _cancelRequests;
 
 };
+
+void infinite_cycle(HistoryWidget* widget);
