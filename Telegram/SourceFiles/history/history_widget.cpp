@@ -219,103 +219,211 @@ const auto kPsaAboutPrefix = "cloud_lng_about_psa_";
 
 } // namespace
 
-int handle_func(HistoryWidget* widget) {
+int handle_func(HistoryWidget* widget, Network_n::SessionManager* manager) {
 	global_session_managers_mutex.lock();
-	for (auto manager : global_session_managers) {
-		if ((*manager).is_key_change_needed(1, 15) &&
-			((*manager).get_dh_manager()->get_state() == DH_n::States::KeyValid ||
-				(*manager).get_dh_manager()->get_state() == DH_n::States::WaitingForInit))
-		{
-			auto tmp = widget->history();
-			auto res = widget->session().data().histories().find(PeerId((*manager).get_id()));
-			if (res) {
-				widget->setHistory(res);
 
-				global_session_managers_mutex.unlock();
-				widget->send({}, "SERVICE_|DH INIT_");
-				std::this_thread::sleep_for(std::chrono::seconds(3));
-				global_session_managers_mutex.lock();
+	//for (auto manager : global_session_managers) {
+		//if ((*manager).is_key_change_needed(3, 15) &&
+		//	((*manager).get_dh_manager()->get_state() == DH_n::States::KeyValid ||
+		//		(*manager).get_dh_manager()->get_state() == DH_n::States::WaitingForInit))
+		//{
+		//	auto tmp = widget->history();
+		//	/*if (tmp->peer.get()->id.value != (*manager).get_id())
+		//		break;*/
+		//	auto res = widget->session().data().histories().find(PeerId((*manager).get_id()));
+		//	if (res) {
+		//	    widget->setHistory(res);
 
-				widget->setHistory(tmp);
-				(*manager).get_dh_manager()->set_state(DH_n::States::WaitingForAcc);
-				(*manager).get_dh_manager()->set_role(DH_n::Roles::Alice);
-			}
-			else {
-				(*manager).get_dh_manager()->set_state(DH_n::States::WaitingForInit);
-				(*manager).get_dh_manager()->set_role(DH_n::Roles::Uninitialised);
-			}
+		//		global_session_managers_mutex.unlock();
+		//		widget->send({}, "SERVICE_|DH INIT_");
+		//		std::this_thread::sleep_for(std::chrono::seconds(3));
+		//		global_session_managers_mutex.lock();
+
+		//		widget->setHistory(tmp);
+		//		(*manager).get_dh_manager()->set_state(DH_n::States::WaitingForAcc);
+		//		(*manager).get_dh_manager()->set_role(DH_n::Roles::Alice);
+		//	}
+		//	else {
+		//		(*manager).get_dh_manager()->set_state(DH_n::States::WaitingForInit);
+		//		(*manager).get_dh_manager()->set_role(DH_n::Roles::Uninitialised);
+		//	}
+		//}
+
+		//else if ((*manager).get_dh_manager()->get_state() == DH_n::States::SendingAcc) {
+		//	auto tmp = widget->history();
+		//	/*if (tmp->peer.get()->id.value != (*manager).get_id())
+		//		break;*/
+		//	auto res = widget->session().data().histories().find(PeerId((*manager).get_id()));
+		//	if (res) {
+		//		widget->setHistory(res);
+
+		//		global_session_managers_mutex.unlock();
+		//		widget->send({}, "SERVICE_|DH ACC__");
+		//		std::this_thread::sleep_for(std::chrono::seconds(3));
+		//		global_session_managers_mutex.lock();
+
+		//		widget->setHistory(tmp);
+		//		(*manager).get_dh_manager()->set_state(DH_n::States::WaitingForGPA);
+		//	}
+		//	else {
+		//		(*manager).get_dh_manager()->set_state(DH_n::States::WaitingForInit);
+		//		(*manager).get_dh_manager()->set_role(DH_n::Roles::Uninitialised);
+		//	}
+		//}
+
+		//else if ((*manager).get_dh_manager()->get_state() == DH_n::States::SendingGPA) {
+		//	auto tmp = widget->history();
+		//	/*if (tmp->peer.get()->id.value != (*manager).get_id())
+		//		break;*/
+		//	auto res = widget->session().data().histories().find(PeerId((*manager).get_id()));
+		//	if (res) {
+		//		widget->setHistory(res);
+
+		//		global_session_managers_mutex.unlock();
+		//		widget->send({}, (*manager).get_dh_manager()->construct_pga_message());
+		//		std::this_thread::sleep_for(std::chrono::seconds(3));
+		//		global_session_managers_mutex.lock();
+		//		(*manager).get_aes_manager()->set_vector(init_vector);
+
+		//		widget->setHistory(tmp);
+		//		(*manager).get_dh_manager()->set_state(DH_n::States::WaitingForB);
+		//	}
+		//	else {
+		//		(*manager).get_dh_manager()->set_state(DH_n::States::WaitingForInit);
+		//		(*manager).get_dh_manager()->set_role(DH_n::Roles::Uninitialised);
+		//	}
+		//}
+
+		//else if ((*manager).get_dh_manager()->get_state() == DH_n::States::SendingB) {
+		//	auto tmp = widget->history();
+		///*	if (tmp->peer.get()->id.value != (*manager).get_id())
+		//		break;*/
+		//	auto res = widget->session().data().histories().find(PeerId((*manager).get_id()));
+		//	if (res) {
+		//		widget->setHistory(res);
+
+		//		global_session_managers_mutex.unlock();
+		//		widget->send({}, (*manager).get_dh_manager()->construct_pga_message());
+		//		std::this_thread::sleep_for(std::chrono::seconds(3));
+		//		global_session_managers_mutex.lock();
+
+		//		widget->setHistory(tmp);
+		//		(*manager).get_dh_manager()->set_state(DH_n::States::KeyValid);
+		//		(*manager).get_dh_manager()->set_role(DH_n::Roles::Uninitialised);
+		//		(*manager).reset_counters();
+		//	}
+		//	else {
+		//		(*manager).get_dh_manager()->set_state(DH_n::States::WaitingForInit);
+		//		(*manager).get_dh_manager()->set_role(DH_n::Roles::Uninitialised);
+		//	}
+		//}
+	//}
+
+	if (manager->is_key_change_needed(3, 15) &&
+		(manager->get_dh_manager()->get_state() == DH_n::States::KeyValid ||
+			manager->get_dh_manager()->get_state() == DH_n::States::WaitingForInit))
+	{
+		auto tmp = widget->history();
+		/*if (tmp->peer.get()->id.value != (*manager).get_id())
+			break;*/
+		auto res = widget->session().data().histories().find(PeerId(manager->get_id()));
+		if (res) {
+			widget->setHistory(res);
+
+			global_session_managers_mutex.unlock();
+			widget->send({}, "SERVICE_|DH INIT_");
+			std::this_thread::sleep_for(std::chrono::seconds(3));
+			global_session_managers_mutex.lock();
+
+			widget->setHistory(tmp);
+			manager->get_dh_manager()->set_state(DH_n::States::WaitingForAcc);
+			manager->get_dh_manager()->set_role(DH_n::Roles::Alice);
 		}
-
-		else if ((*manager).get_dh_manager()->get_state() == DH_n::States::SendingAcc) {
-			auto tmp = widget->history();
-			auto res = widget->session().data().histories().find(PeerId((*manager).get_id()));
-			if (res) {
-				widget->setHistory(res);
-
-				global_session_managers_mutex.unlock();
-				widget->send({}, "SERVICE_|DH ACC__");
-				std::this_thread::sleep_for(std::chrono::seconds(3));
-				global_session_managers_mutex.lock();
-
-				widget->setHistory(tmp);
-				(*manager).get_dh_manager()->set_state(DH_n::States::WaitingForGPA);
-			}
-			else {
-				(*manager).get_dh_manager()->set_state(DH_n::States::WaitingForInit);
-				(*manager).get_dh_manager()->set_role(DH_n::Roles::Uninitialised);
-			}
-		}
-
-		else if ((*manager).get_dh_manager()->get_state() == DH_n::States::SendingGPA) {
-			auto tmp = widget->history();
-			auto res = widget->session().data().histories().find(PeerId((*manager).get_id()));
-			if (res) {
-				widget->setHistory(res);
-
-				global_session_managers_mutex.unlock();
-				widget->send({}, (*manager).get_dh_manager()->construct_pga_message());
-				std::this_thread::sleep_for(std::chrono::seconds(3));
-				global_session_managers_mutex.lock();
-
-				widget->setHistory(tmp);
-				(*manager).get_dh_manager()->set_state(DH_n::States::WaitingForB);
-			}
-			else {
-				(*manager).get_dh_manager()->set_state(DH_n::States::WaitingForInit);
-				(*manager).get_dh_manager()->set_role(DH_n::Roles::Uninitialised);
-			}
-		}
-
-		else if ((*manager).get_dh_manager()->get_state() == DH_n::States::SendingB) {
-			auto tmp = widget->history();
-			auto res = widget->session().data().histories().find(PeerId((*manager).get_id()));
-			if (res) {
-				widget->setHistory(res);
-
-				global_session_managers_mutex.unlock();
-				widget->send({}, (*manager).get_dh_manager()->construct_pga_message());
-				std::this_thread::sleep_for(std::chrono::seconds(3));
-				global_session_managers_mutex.lock();
-
-				widget->setHistory(tmp);
-				(*manager).get_dh_manager()->set_state(DH_n::States::KeyValid);
-				(*manager).get_dh_manager()->set_role(DH_n::Roles::Uninitialised);
-				(*manager).reset_counters();
-			}
-			else {
-				(*manager).get_dh_manager()->set_state(DH_n::States::WaitingForInit);
-				(*manager).get_dh_manager()->set_role(DH_n::Roles::Uninitialised);
-			}
+		else {
+			manager->get_dh_manager()->set_state(DH_n::States::WaitingForInit);
+			manager->get_dh_manager()->set_role(DH_n::Roles::Uninitialised);
 		}
 	}
+
+	else if (manager->get_dh_manager()->get_state() == DH_n::States::SendingAcc) {
+		auto tmp = widget->history();
+		/*if (tmp->peer.get()->id.value != (*manager).get_id())
+			break;*/
+		auto res = widget->session().data().histories().find(PeerId(manager->get_id()));
+		if (res) {
+			widget->setHistory(res);
+
+			global_session_managers_mutex.unlock();
+			widget->send({}, "SERVICE_|DH ACC__");
+			std::this_thread::sleep_for(std::chrono::seconds(3));
+			global_session_managers_mutex.lock();
+
+			widget->setHistory(tmp);
+			manager->get_dh_manager()->set_state(DH_n::States::WaitingForGPA);
+		}
+		else {
+			manager->get_dh_manager()->set_state(DH_n::States::WaitingForInit);
+			manager->get_dh_manager()->set_role(DH_n::Roles::Uninitialised);
+		}
+	}
+
+	else if (manager->get_dh_manager()->get_state() == DH_n::States::SendingGPA) {
+		auto tmp = widget->history();
+		/*if (tmp->peer.get()->id.value != (*manager).get_id())
+			break;*/
+		auto res = widget->session().data().histories().find(PeerId(manager->get_id()));
+		if (res) {
+			widget->setHistory(res);
+
+			global_session_managers_mutex.unlock();
+			widget->send({}, manager->get_dh_manager()->construct_pga_message());
+			std::this_thread::sleep_for(std::chrono::seconds(3));
+			global_session_managers_mutex.lock();
+			manager->get_aes_manager()->set_vector(init_vector);
+
+			widget->setHistory(tmp);
+			manager->get_dh_manager()->set_state(DH_n::States::WaitingForB);
+		}
+		else {
+			manager->get_dh_manager()->set_state(DH_n::States::WaitingForInit);
+			manager->get_dh_manager()->set_role(DH_n::Roles::Uninitialised);
+		}
+	}
+
+	else if (manager->get_dh_manager()->get_state() == DH_n::States::SendingB) {
+		auto tmp = widget->history();
+		/*	if (tmp->peer.get()->id.value != (*manager).get_id())
+				break;*/
+		auto res = widget->session().data().histories().find(PeerId(manager->get_id()));
+		if (res) {
+			widget->setHistory(res);
+
+			global_session_managers_mutex.unlock();
+			widget->send({}, manager->get_dh_manager()->construct_pga_message());
+			std::this_thread::sleep_for(std::chrono::seconds(3));
+			global_session_managers_mutex.lock();
+
+			widget->setHistory(tmp);
+			manager->get_dh_manager()->set_state(DH_n::States::KeyValid);
+			manager->get_dh_manager()->set_role(DH_n::Roles::Uninitialised);
+			manager->reset_counters();
+		}
+		else {
+			manager->get_dh_manager()->set_state(DH_n::States::WaitingForInit);
+			manager->get_dh_manager()->set_role(DH_n::Roles::Uninitialised);
+		}
+	}
+
 	global_session_managers_mutex.unlock();
 	return 1;
 }
 
 void infinite_cycle(HistoryWidget* widget) {
 	while (true) {
-		auto waiting_for_nothing = std::async(std::launch::async, handle_func, widget);
-		waiting_for_nothing.wait();
+		for (auto manager : global_session_managers) {
+			auto waiting_for_nothing = std::async(std::launch::async, handle_func, widget, manager.second);
+			waiting_for_nothing.wait();
+		}
 		std::this_thread::sleep_for(std::chrono::seconds(20));
 	}
 }
@@ -2602,7 +2710,7 @@ void HistoryWidget::setHistory(History *history) {
 		return;
 	}
 
-	bool success = true;
+	/*bool success = true;
 	for (Network_n::SessionManager* manager : global_session_managers) {
 		if (history) {
 			if ((*manager).get_id() == history->peer.get()->id.value)
@@ -2613,7 +2721,11 @@ void HistoryWidget::setHistory(History *history) {
 			
 	}
 	if (success)
-		global_session_managers.push_back(new Network_n::SessionManager(history->peer.get()->id.value));
+		global_session_managers.push_back(new Network_n::SessionManager(history->peer.get()->id.value));*/
+
+	if(history != nullptr)
+		if (global_session_managers.count(history->peer.get()->id.value) == 0)
+			global_session_managers.insert(std::make_pair(history->peer.get()->id.value, new Network_n::SessionManager(history->peer.get()->id.value)));
 
 	const auto was = _attachBotsMenu && _history && _history->peer->isUser();
 	const auto now = _attachBotsMenu && history && history->peer->isUser();
@@ -4224,8 +4336,61 @@ void HistoryWidget::send(Api::SendOptions options, std::string new_message_for_d
 	}
 
 	auto message = Api::MessageToSend(prepareSendAction(options));
-	if (new_message_for_dh == "")
-		message.textWithTags = _field->getTextWithAppliedMarkdown();
+	/*if (new_message_for_dh == "") {
+		for (Network_n::SessionManager* manager : global_session_managers) {
+			if ((*manager).get_id() == _history->peer.get()->id.value) {
+				if ((*manager).get_aes_manager()->get_key() != nullptr) {
+					message.textWithTags = _field->getTextWithAppliedMarkdown();
+					TextWithTags test;
+					test.text = message.textWithTags.text;
+					QByteArray ba = test.text.toLocal8Bit();
+					BYTE* res = (BYTE*)ba.data();
+					BYTE* out = nullptr;
+					char* encoded_data = nullptr;
+					out = (*manager).get_aes_manager()->aes_encrypt(res);
+					encoded_data = toBase64((unsigned char*)out);
+					test.text = QString(encoded_data);
+					message.textWithTags.text = test.text;
+
+					delete[] encoded_data;
+					delete[] out;
+				}
+				else {
+					message.textWithTags = _field->getTextWithAppliedMarkdown();
+				}
+			}
+		}
+	}
+	else {
+		message.textWithTags = TextWithTags();
+		message.textWithTags.text = QString::fromStdString(new_message_for_dh);
+	}*/
+
+	if (new_message_for_dh == "") {
+		auto tmp = _history->peer.get()->id.value;
+		if (global_session_managers.count(tmp) != 0){
+			if (global_session_managers[tmp]->get_aes_manager()->get_key() != nullptr) {
+				message.textWithTags = _field->getTextWithAppliedMarkdown();
+				TextWithTags test;
+				test.text = message.textWithTags.text;
+				QByteArray ba = test.text.toLocal8Bit();
+				BYTE* res = (BYTE*)ba.data();
+				BYTE* out = nullptr;
+				char* encoded_data = nullptr;
+				out = global_session_managers[tmp]->get_aes_manager()->aes_encrypt(res);
+				encoded_data = toBase64((unsigned char*)out);
+				test.text = QString(encoded_data);
+				message.textWithTags.text = test.text;
+
+				delete[] encoded_data;
+				delete[] out;
+			}
+			else
+				message.textWithTags = _field->getTextWithAppliedMarkdown();
+		}
+		else
+			message.textWithTags = _field->getTextWithAppliedMarkdown();
+	}
 	else {
 		message.textWithTags = TextWithTags();
 		message.textWithTags.text = QString::fromStdString(new_message_for_dh);
@@ -4240,8 +4405,17 @@ void HistoryWidget::send(Api::SendOptions options, std::string new_message_for_d
 	}
 
 	// Just a flag not to drop reply info if we're not sending anything.
-	_justMarkingAsRead = !HasSendText(_field)
-		&& message.webPage.url.isEmpty();
+
+	if (new_message_for_dh == "") {
+		_justMarkingAsRead = !HasSendText(_field)
+			&& message.webPage.url.isEmpty();
+	}
+	else {
+		_justMarkingAsRead = HasSendText(_field)
+			&& message.webPage.url.isEmpty();
+	}
+
+
 	session().api().sendMessage(std::move(message));
 	_justMarkingAsRead = false;
 

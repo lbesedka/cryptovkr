@@ -69,12 +69,16 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 void handle(uint64_t id_1, uint64_t id_2, TextWithTags c) {
 	global_session_managers_mutex.lock();
-	for (Network_n::SessionManager* manager : global_session_managers) {
+	/*for (Network_n::SessionManager* manager : global_session_managers) {
 		if ((*manager).get_id() == id_1) {
 			if ((*manager).get_id() == id_2) {
 				(*manager).handle_service_message(c.text.toStdString());
 			}
 		}
+	}*/
+
+	if (global_session_managers.count(id_1) != 0){
+		global_session_managers[id_1]->handle_service_message(c.text.toStdString());
 	}
 	global_session_managers_mutex.unlock();
 	std::this_thread::sleep_for(std::chrono::seconds(3));
@@ -525,28 +529,62 @@ not_null<HistoryItem*> History::insertItem(
 	auto wait_thread = std::async(std::launch::async, handle, this->peer.get()->id.value, result->from().get()->id.value, test);
 	wait_thread.wait();
 
-	QByteArray ba = test.text.toLocal8Bit();
-	const unsigned char* res = (const unsigned char*)ba.data();
 
-	char* decoded_data = nullptr;
-	decoded_data = fromBase64((unsigned char*)res);
+	/*for (Network_n::SessionManager* manager : global_session_managers) {
+		if ((*manager).get_id() == this->peer.get()->id.value) {
+			if ((*manager).get_aes_manager()->get_key() != nullptr) {
 
-	if (strcmp(decoded_data, (char*)res) == 0) {
-		Ensures(ok);
-		return result;
+				QByteArray ba = test.text.toLocal8Bit();
+				const unsigned char* res = (const unsigned char*)ba.data();
+
+				char* decoded_data = nullptr;
+				decoded_data = fromBase64((unsigned char*)res);
+
+				if (strcmp(decoded_data, (char*)res) == 0) {
+					Ensures(ok);
+					return result;
+				}
+				BYTE* out = nullptr;
+				out = (*manager).get_aes_manager()->aes_decrypt((BYTE*)decoded_data);
+				TextWithEntities resulting_string;
+				resulting_string.text = QString::fromLocal8Bit((char*)out);
+				result->setText(resulting_string);
+
+				delete[] out;
+				delete[] decoded_data;
+			}
+			else {
+				return result; 
+			}
+		}
+	}*/
+
+	uint64_t tmp = this->peer.get()->id.value;
+	if (global_session_managers.count(tmp) != 0){
+		if (global_session_managers[tmp]->get_aes_manager()->get_key() != nullptr) {
+			QByteArray ba = test.text.toLocal8Bit();
+			const unsigned char* res = (const unsigned char*)ba.data();
+
+			char* decoded_data = nullptr;
+			decoded_data = fromBase64((unsigned char*)res);
+
+			if (strcmp(decoded_data, (char*)res) == 0) {
+				Ensures(ok);
+				return result;
+			}
+			BYTE* out = nullptr;
+			out = global_session_managers[tmp]->get_aes_manager()->aes_decrypt((BYTE*)decoded_data);
+			TextWithEntities resulting_string;
+			resulting_string.text = QString::fromLocal8Bit((char*)out);
+			result->setText(resulting_string);
+
+			delete[] out;
+			delete[] decoded_data;
+		}
+		else
+			return result;
 	}
-	BYTE* out = nullptr;
-	out = aesDecrypt((BYTE*)decoded_data);
-	TextWithEntities resulting_string;
-	resulting_string.text = QString::fromLocal8Bit((char*)out);
-	result->setText(resulting_string);
 
-	std::tuple<EVP_PKEY*, EVP_PKEY*, BIGNUM*, BIGNUM*> tup = generate_DH_parameters();
-	unsigned char* shared_key; 
-	shared_key = generateSharedKey(std::get<0>(tup), std::get<1>(tup), std::get<2>(tup), std::get<3>(tup));
-
-	delete[] out;
-	delete[] decoded_data;
 	Ensures(ok);
 	return result;
 }

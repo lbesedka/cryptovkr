@@ -17,7 +17,7 @@ unsigned char init_vector[16] = {
 		0x61,0x73,0x61,0x73,0x64,0x61,0x73,0x63,0x6c,0x61,0x6e,0x6f,0x76,0x69,0x63,0x68
 };
 
-std::vector<Network_n::SessionManager *> global_session_managers;
+std::map<uint64_t, Network_n::SessionManager*> global_session_managers;
 
 DH_n::Roles current_role = DH_n::Roles::Uninitialised;
 
@@ -750,19 +750,21 @@ namespace Network_n {
 
 				dh_manager.parse_pga_message(message, "./" + std::to_string(this->dhm_id) + "/" + "key.pub");
 				aes_manager.set_key(dh_manager.key_generator.generateSharedKey());
+				aes_manager.set_vector(init_vector);
 				dh_manager.set_state(DH_n::States::SendingB);
 				return 1;
 			}
 
 		}
 		else if (payload.find("B NUM___") != std::string::npos) {
-			if (current_state != DH_n::States::WaitingForB || current_role == DH_n::Roles::Bob)
+			if (dh_manager.get_state() != DH_n::States::WaitingForB || dh_manager.get_role() == DH_n::Roles::Bob)
 				return 0;
 			else {
 				//dh_manager.rsa_manager.read_public_key("./" + std::to_string(this->dhm_id) + "/key.pub");
 
 				dh_manager.parse_pga_message(message, "./" + std::to_string(this->dhm_id) + "/" + "key.pub");
 				aes_manager.set_key(dh_manager.key_generator.generateSharedKey());
+				aes_manager.set_vector(init_vector);
 				dh_manager.set_state(DH_n::States::KeyValid);
 				dh_manager.set_role(DH_n::Roles::Uninitialised);
 				return 1;

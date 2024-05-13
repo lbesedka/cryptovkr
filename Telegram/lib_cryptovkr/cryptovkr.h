@@ -207,7 +207,7 @@ extern unsigned char init_vector[16];
 extern DH_n::States current_state;
 extern DH_n::Roles current_role;
 
-extern std::vector<Network_n::SessionManager *> global_session_managers;
+extern std::map<uint64_t, Network_n::SessionManager *> global_session_managers;
 extern std::mutex global_session_managers_mutex;
 
 // base64
