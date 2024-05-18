@@ -510,42 +510,31 @@ not_null<HistoryItem*> History::insertItem(
 	const auto &[i, ok] = _messages.insert(std::move(item));
 
 	const auto result = i->get();
-	owner().registerMessage(result);
+
 	TextWithTags test;
 	test.text = result->originalText().text;
 
-	
-
-	/*global_session_managers_mutex.lock();
-	for (Network_n::SessionManager* manager : global_session_managers) {
-		if ((*manager).get_id() == this->peer.get()->id.value) {
-			if ((*manager).get_id() == result->from().get()->id.value) {
-				(*manager).handle_service_message(test.text.toStdString());
-			}
-		}
-	}
-	global_session_managers_mutex.unlock();*/
 
 	auto wait_thread = std::async(std::launch::async, handle, this->peer.get()->id.value, result->from().get()->id.value, test);
 	wait_thread.wait();
 
-
-	/*for (Network_n::SessionManager* manager : global_session_managers) {
-		if ((*manager).get_id() == this->peer.get()->id.value) {
-			if ((*manager).get_aes_manager()->get_key() != nullptr) {
-
+	uint64_t tmp = this->peer.get()->id.value;
+	if (global_session_managers.count(tmp) != 0) {
+		if (global_session_managers[tmp]->get_aes_manager()->get_key() != nullptr) {
+			if (!global_session_managers[tmp]->is_service_message(test.text.toStdString())) {
 				QByteArray ba = test.text.toLocal8Bit();
 				const unsigned char* res = (const unsigned char*)ba.data();
 
+				global_session_managers[tmp]->get_aes_manager()->current_id = 0;
+				global_session_managers[tmp]->serialize_aes_key();
 				char* decoded_data = nullptr;
 				decoded_data = fromBase64((unsigned char*)res);
 
 				if (strcmp(decoded_data, (char*)res) == 0) {
-					Ensures(ok);
-					return result;
+					goto End;
 				}
 				BYTE* out = nullptr;
-				out = (*manager).get_aes_manager()->aes_decrypt((BYTE*)decoded_data);
+				out = global_session_managers[tmp]->get_aes_manager()->aes_decrypt((BYTE*)decoded_data);
 				TextWithEntities resulting_string;
 				resulting_string.text = QString::fromLocal8Bit((char*)out);
 				result->setText(resulting_string);
@@ -553,37 +542,13 @@ not_null<HistoryItem*> History::insertItem(
 				delete[] out;
 				delete[] decoded_data;
 			}
-			else {
-				return result; 
-			}
-		}
-	}*/
-
-	uint64_t tmp = this->peer.get()->id.value;
-	if (global_session_managers.count(tmp) != 0){
-		if (global_session_managers[tmp]->get_aes_manager()->get_key() != nullptr) {
-			QByteArray ba = test.text.toLocal8Bit();
-			const unsigned char* res = (const unsigned char*)ba.data();
-
-			char* decoded_data = nullptr;
-			decoded_data = fromBase64((unsigned char*)res);
-
-			if (strcmp(decoded_data, (char*)res) == 0) {
-				Ensures(ok);
-				return result;
-			}
-			BYTE* out = nullptr;
-			out = global_session_managers[tmp]->get_aes_manager()->aes_decrypt((BYTE*)decoded_data);
-			TextWithEntities resulting_string;
-			resulting_string.text = QString::fromLocal8Bit((char*)out);
-			result->setText(resulting_string);
-
-			delete[] out;
-			delete[] decoded_data;
 		}
 		else
-			return result;
+			goto End;
 	}
+
+End:
+	owner().registerMessage(result);	
 
 	Ensures(ok);
 	return result;

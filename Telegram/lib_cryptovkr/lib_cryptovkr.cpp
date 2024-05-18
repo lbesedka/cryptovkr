@@ -19,10 +19,6 @@ unsigned char init_vector[16] = {
 
 std::map<uint64_t, Network_n::SessionManager*> global_session_managers;
 
-DH_n::Roles current_role = DH_n::Roles::Uninitialised;
-
-DH_n::States current_state = DH_n::States::WaitingForInit;
-
 namespace DH_n {
 
 	KeyGenerator::KeyGenerator() {
@@ -31,6 +27,7 @@ namespace DH_n {
 		public_key = nullptr;
 		private_key = nullptr;
 		external_public_key = nullptr;
+		key_pair = nullptr;
 	}
 
 	KeyGenerator::KeyGenerator(BIGNUM* initial_prime, BIGNUM* initial_generator) {
@@ -39,6 +36,7 @@ namespace DH_n {
 		public_key = nullptr;
 		private_key = nullptr;
 		external_public_key = nullptr;
+		key_pair = nullptr;
 	}
 
 	int KeyGenerator::set_prime(BIGNUM* new_prime) {
@@ -81,9 +79,20 @@ namespace DH_n {
 		return 0;
 	}
 
+	int KeyGenerator::set_key_pair(EVP_PKEY* new_key_pair) {
+		if (new_key_pair) {
+			key_pair = new_key_pair;
+			return 1;
+		}
+		return 0;
+	}
+
 	int KeyGenerator::generate_DH_parameters() {
 		BIGNUM* big_add = BN_new();
 		BIGNUM* big_rem = BN_new();
+
+		BIGNUM* pub_bucket = BN_new();
+
 
 		BN_set_word(big_add, 24);
 		BN_set_word(big_rem, 23);
@@ -98,7 +107,7 @@ namespace DH_n {
 		BN_set_word(big_rem, 23);
 
 
-		EVP_PKEY_CTX* pctx = EVP_PKEY_CTX_new_from_name(NULL, "DH", NULL);
+		EVP_PKEY_CTX* pctx = EVP_PKEY_CTX_new_from_name(NULL, "DHX", NULL);
 		if (!pctx) {
 			return 0;
 		}
@@ -162,26 +171,29 @@ namespace DH_n {
 			EVP_PKEY_CTX_free(keyGenerationCtx);
 			return 0;
 		}
-		EVP_PKEY* keyPair = nullptr;
-		if (EVP_PKEY_generate(keyGenerationCtx, &keyPair) == 0) {
+		//EVP_PKEY* keyPair = nullptr;
+		if (EVP_PKEY_generate(keyGenerationCtx, &key_pair) == 0) {
 			EVP_PKEY_CTX_free(domainParamKeyCtx);
 			EVP_PKEY_CTX_free(pctx);
 			EVP_PKEY_CTX_free(keyGenerationCtx);
 			return 0;
 		}
 
-		if (EVP_PKEY_keygen(keyGenerationCtx, &public_key) == 0) {
-			EVP_PKEY_CTX_free(domainParamKeyCtx);
-			EVP_PKEY_CTX_free(pctx);
-			EVP_PKEY_CTX_free(keyGenerationCtx);
-			return 0;
-		}
 		if (EVP_PKEY_keygen(keyGenerationCtx, &private_key) == 0) {
 			EVP_PKEY_CTX_free(domainParamKeyCtx);
 			EVP_PKEY_CTX_free(pctx);
 			EVP_PKEY_CTX_free(keyGenerationCtx);
 			return 0;
 		}
+		if (EVP_PKEY_keygen(keyGenerationCtx, &public_key) == 0) {
+			EVP_PKEY_CTX_free(domainParamKeyCtx);
+			EVP_PKEY_CTX_free(pctx);
+			EVP_PKEY_CTX_free(keyGenerationCtx);
+			return 0;
+		}
+
+		/*set_private_key(private_key);
+		set_public_key(public_key);*/
 
 		EVP_PKEY_CTX_free(pctx);
 		EVP_PKEY_CTX_free(domainParamKeyCtx);
@@ -194,18 +206,29 @@ namespace DH_n {
 		if (!prime || !generator || !private_key || !external_public_key)
 			return nullptr;
 
+		BIGNUM* alesha = BN_new();
+		BIGNUM* popovich = BN_new();
+		BIGNUM* tugarin_zmey = BN_new();
+
+		if (!EVP_PKEY_get_bn_param(private_key, OSSL_PKEY_PARAM_PRIV_KEY, &alesha) ||
+			!EVP_PKEY_get_bn_param(public_key, OSSL_PKEY_PARAM_PUB_KEY, &popovich))
+			return nullptr;
 
 		OSSL_PARAM_BLD* paramBuild = OSSL_PARAM_BLD_new();
-		if (OSSL_PARAM_BLD_push_BN(paramBuild, OSSL_PKEY_PARAM_FFC_P, prime) == 0 || OSSL_PARAM_BLD_push_BN(paramBuild, OSSL_PKEY_PARAM_FFC_G, generator) == 0)
+		if (!OSSL_PARAM_BLD_push_BN(paramBuild, OSSL_PKEY_PARAM_FFC_P, prime)|| 
+			!OSSL_PARAM_BLD_push_BN(paramBuild, OSSL_PKEY_PARAM_FFC_G, generator) ||
+			!OSSL_PARAM_BLD_push_BN(paramBuild, OSSL_PKEY_PARAM_PRIV_KEY, alesha) ||
+			!OSSL_PARAM_BLD_push_BN(paramBuild, OSSL_PKEY_PARAM_PUB_KEY, popovich))
 			return nullptr;
 
 		OSSL_PARAM* param = OSSL_PARAM_BLD_to_param(paramBuild);
 		EVP_PKEY_CTX* kctx = EVP_PKEY_CTX_new(public_key, NULL);
+
 		if (EVP_PKEY_derive_init_ex(kctx, param) == 0) {
 			EVP_PKEY_CTX_free(kctx);
 			return nullptr;
 		}
-		if (EVP_PKEY_derive_set_peer(kctx, private_key) == 0) {
+		if (EVP_PKEY_derive_set_peer_ex(kctx, external_public_key, 0) == 0) {
 			EVP_PKEY_CTX_free(kctx);
 			return nullptr;
 		}
@@ -232,10 +255,10 @@ namespace DH_n {
 		key_generator = KeyGenerator();
 		rsa_manager = RSA_n::RsaManager::RsaManager();
 
-		if (!rsa_manager.read_private_key("./self/key.pem")) {
-			rsa_manager.generate_keys();
-			rsa_manager.write_private_key("./self/key.pem");
-			rsa_manager.write_public_key("./self/key.pub");
+		if (!get_rsa_manager()->read_private_key("./self/key.pem")) {
+			get_rsa_manager()->generate_keys();
+			get_rsa_manager()->write_private_key("./self/key.pem");
+			get_rsa_manager()->write_public_key("./self/key.pub");
 		}
 	}
 	DiffieHellmanManager::DiffieHellmanManager(States initial_state, Roles initial_role) {
@@ -249,13 +272,13 @@ namespace DH_n {
 		current_role = initial_role;
 		key_generator = KeyGenerator();
 		rsa_manager = RSA_n::RsaManager::RsaManager();
-		/*if (!rsa_manager.read_private_key(path_to_private_key)) {
-			rsa_manager.generate_keys();
+		/*if (!get_rsa_manager()->read_private_key(path_to_private_key)) {
+			get_rsa_manager()->generate_keys();
 		}*/
 	}
 
 	std::string DiffieHellmanManager::construct_pga_message() {
-		if (!key_generator.get_prime() || !key_generator.get_generator() || !key_generator.get_public_key())
+		if (!get_key_generator()->get_prime() || !get_key_generator()->get_generator() || !get_key_generator()->get_public_key())
 			return "";
 
 
@@ -267,22 +290,22 @@ namespace DH_n {
 		else
 			return "";
 
-		std::string p_part = bignum_to_base64_string(key_generator.get_prime());
+		std::string p_part = bignum_to_base64_string(get_key_generator()->get_prime());
 		p_part.erase(std::remove(p_part.begin(), p_part.end(), '\n'), p_part.end());
 
 		p_part += "|";
-		std::string g_part = bignum_to_base64_string(key_generator.get_generator());
+		std::string g_part = bignum_to_base64_string(get_key_generator()->get_generator());
 		g_part.erase(std::remove(g_part.begin(), g_part.end(), '\n'), g_part.end());
 
 		g_part += "|";
-		char* a_part = key_to_base64_string(key_generator.get_public_key());
+		char* a_part = key_to_base64_string(get_key_generator()->get_public_key());
 		if (a_part == NULL)
 			return "";
 		std::string key_part = a_part;
 		key_part.erase(std::remove(key_part.begin(), key_part.end(), '\n'), key_part.end());
 
 		std::string message = service + p_part + g_part + key_part;
-		std::string sign = rsa_manager.sign_message_base64(message);
+		std::string sign = get_rsa_manager()->sign_message_base64(message);
 		sign.erase(std::remove(sign.begin(), sign.end(), '\n'), sign.end());
 
 
@@ -299,31 +322,35 @@ namespace DH_n {
 		std::string pga_num_service = message.substr(0, 8);
 		if (pga_num_service != "PGA NUM_" && pga_num_service != "B NUM___")
 			return 0;
+		pga_num_service.erase(std::remove(pga_num_service.begin(), pga_num_service.end(), '\n'), pga_num_service.end());
 		message.erase(0, message.find("|") + 1);
 
 		std::string p_num = message.substr(0, message.find("|"));
 		message.erase(0, message.find("|") + 1);
+		p_num.erase(std::remove(p_num.begin(), p_num.end(), '\n'), p_num.end());
 
 		std::string g_num = message.substr(0, message.find("|"));
 		message.erase(0, message.find("|") + 1);
+		g_num.erase(std::remove(g_num.begin(), g_num.end(), '\n'), g_num.end());
 
 		std::string key = message.substr(0, message.find("|"));
 		message.erase(0, message.find("|") + 1);
+		key.erase(std::remove(key.begin(), key.end(), '\n'), key.end());
 
 		std::string sign = message.substr(0);
 		std::string message_copy = "SERVICE_|" + pga_num_service + "|" + p_num + "|" + g_num + "|" + key;
 
-		rsa_manager.read_public_key(path_to_key);
-		/*if (!rsa_manager.check_sign_from_base64(sign, message_copy))
-			return 0;*/
+		get_rsa_manager()->read_public_key(path_to_key);
+		if (!get_rsa_manager()->check_sign_from_base64(sign, message_copy))
+			return 0;
 
 		int success = 0;
-		if (current_role == Roles::Bob) {
-			success = key_generator.set_prime(base64_string_to_bignum((char*)p_num.c_str()));
-			success = key_generator.set_generator(base64_string_to_bignum((char*)g_num.c_str()));
-			key_generator.generate_DH_parameters();
+		if (this->current_role == Roles::Bob) {
+			success = get_key_generator()->set_prime(base64_string_to_bignum((char*)p_num.c_str()));
+			success = get_key_generator()->set_generator(base64_string_to_bignum((char*)g_num.c_str()));
+			get_key_generator()->generate_DH_parameters();
 		}
-		success = key_generator.set_external_key(base64_string_to_key((char*)key.c_str()));
+		success = get_key_generator()->set_external_key(base64_string_to_key((char*)key.c_str()));
 
 		return success;
 	}
@@ -355,7 +382,7 @@ namespace DH_n {
 		BIO_read(bio, pem, length);
 		BIO_free(bio);
 
-		char* result = toBase64((unsigned char *)pem);
+		char* result = toBase64((unsigned char *)pem, length);
 		//delete[] pem;
 
 		return result;
@@ -519,7 +546,7 @@ namespace AES_n {
 		if (!key || !init_vector)
 			return nullptr;
 
-		int plain_text_len = strlen((char*)to_decrypt);
+		volatile int plain_text_len = strlen((char*)to_decrypt);
 		BYTE* plain_text = new BYTE[plain_text_len];
 		EVP_CIPHER_CTX* ctx;
 		ctx = EVP_CIPHER_CTX_new();
@@ -533,10 +560,7 @@ namespace AES_n {
 			EVP_CIPHER_CTX_free(ctx);
 			return nullptr;
 		}
-		if (EVP_DecryptFinal_ex(ctx, plain_text + f_length, &s_length) == 0) {
-			EVP_CIPHER_CTX_free(ctx);
-			return nullptr;
-		}
+		EVP_DecryptFinal_ex(ctx, plain_text + f_length, &s_length);
 		plain_text = (BYTE*)realloc(plain_text, f_length + s_length);
 		plain_text[f_length + s_length] = '\0';
 
@@ -584,7 +608,6 @@ namespace RSA_n {
 	int RsaManager::write_private_key(std::string path) {
 		if (!this->key)
 			return 0;
-
 		int success = 0;
 		FILE* pkey = fopen(path.c_str(), "wb");
 		if (!PEM_write_RSAPrivateKey(pkey, this->key, NULL, NULL, 0, NULL, NULL))
@@ -658,9 +681,7 @@ namespace RSA_n {
 		unsigned int outlen = 0;
 		RSA_sign(NID_sha256, message_hash, SHA256_DIGEST_LENGTH, sign, &outlen, this->key);
 
-		RSA_verify(NID_sha256, message_hash, SHA256_DIGEST_LENGTH, (BYTE*)sign, size, this->key);
-
-		char* base64_sign = toBase64(sign);
+		char* base64_sign = toBase64(sign, size);
 
 		return base64_sign;
 	}
@@ -670,8 +691,9 @@ namespace RSA_n {
 			return false;
 
 		BYTE* message_hash = SHA_n::ShaManager::get_sha_hash((char*)message.c_str(), message.size());
-		char* sign_bytes = fromBase64((BYTE *)sign.c_str());
 		const int size = RSA_size(this->key);
+		char* sign_bytes = fromBase64((BYTE*)sign.c_str());
+
 
 		if (RSA_verify(NID_sha256, message_hash, SHA256_DIGEST_LENGTH, (BYTE *)sign_bytes, size, this->key) == 0)
 			return false;
@@ -726,47 +748,48 @@ namespace Network_n {
 			return 0;
 		std::string payload = message.substr(9, 8);
 		if (payload.find("DH INIT_") != std::string::npos) {
-			if (dh_manager.get_state() != DH_n::States::WaitingForInit)
+			if (get_dh_manager()->get_state() != DH_n::States::WaitingForInit)
 				return 0;
 			else {
-				dh_manager.set_state(DH_n::States::SendingAcc);
-				dh_manager.set_role(DH_n::Roles::Bob);
+				get_dh_manager()->set_state(DH_n::States::SendingAcc);
+				get_dh_manager()->set_role(DH_n::Roles::Bob);
 				return 1;
 			}
 		}
 		else if (payload.find("DH ACC__") != std::string::npos) {
-			if (dh_manager.get_state() != DH_n::States::WaitingForAcc || dh_manager.get_role() == DH_n::Roles::Bob)
+			if (get_dh_manager()->get_state() != DH_n::States::WaitingForAcc || get_dh_manager()->get_role() == DH_n::Roles::Bob)
 				return 0;
 			else {
-				dh_manager.key_generator.generate_DH_parameters();
-				dh_manager.set_state(DH_n::States::SendingGPA);
+				get_dh_manager()->get_key_generator()->generate_DH_parameters();
+				get_dh_manager()->set_state(DH_n::States::SendingGPA);
 				return 1;
 			}
 		}
 		else if (payload.find("PGA NUM_") != std::string::npos ) {
-			if (dh_manager.get_state() != DH_n::States::WaitingForGPA || dh_manager.get_role() == DH_n::Roles::Alice)
+			if (get_dh_manager()->get_state() != DH_n::States::WaitingForGPA || get_dh_manager()->get_role() == DH_n::Roles::Alice)
 				return 0;
 			else {
 
-				dh_manager.parse_pga_message(message, "./" + std::to_string(this->dhm_id) + "/" + "key.pub");
-				aes_manager.set_key(dh_manager.key_generator.generateSharedKey());
-				aes_manager.set_vector(init_vector);
-				dh_manager.set_state(DH_n::States::SendingB);
+				get_dh_manager()->parse_pga_message(message, "./" + std::to_string(this->dhm_id) + "/" + "key.pub");
+				get_aes_manager()->set_key(get_dh_manager()->get_key_generator()->generateSharedKey());
+				get_aes_manager()->set_vector(init_vector);
+				get_dh_manager()->set_state(DH_n::States::SendingB);
 				return 1;
 			}
 
 		}
 		else if (payload.find("B NUM___") != std::string::npos) {
-			if (dh_manager.get_state() != DH_n::States::WaitingForB || dh_manager.get_role() == DH_n::Roles::Bob)
+			if (get_dh_manager()->get_state() != DH_n::States::WaitingForB || get_dh_manager()->get_role() == DH_n::Roles::Bob)
 				return 0;
 			else {
-				//dh_manager.rsa_manager.read_public_key("./" + std::to_string(this->dhm_id) + "/key.pub");
+				//get_dh_manager()->get_rsa_manager()->read_public_key("./" + std::to_string(this->dhm_id) + "/key.pub");
 
-				dh_manager.parse_pga_message(message, "./" + std::to_string(this->dhm_id) + "/" + "key.pub");
-				aes_manager.set_key(dh_manager.key_generator.generateSharedKey());
-				aes_manager.set_vector(init_vector);
-				dh_manager.set_state(DH_n::States::KeyValid);
-				dh_manager.set_role(DH_n::Roles::Uninitialised);
+				get_dh_manager()->parse_pga_message(message, "./" + std::to_string(this->dhm_id) + "/" + "key.pub");
+				get_aes_manager()->set_key(get_dh_manager()->get_key_generator()->generateSharedKey());
+				get_aes_manager()->set_vector(init_vector);
+				this->reset_counters();
+				get_dh_manager()->set_state(DH_n::States::KeyValid);
+				get_dh_manager()->set_role(DH_n::Roles::Uninitialised);
 				return 1;
 			}
 		}
@@ -788,22 +811,26 @@ namespace Network_n {
 	}
 
 	int SessionManager::serialize_aes_key(){
-		if (!aes_manager.get_key() || !aes_manager.get_vector())
+		if (!get_aes_manager()->get_key() || !get_aes_manager()->get_vector())
 			return 0;
 		json aes_key_json;
 
-		aes_key_json["id"] = aes_manager.current_id;
-		aes_key_json["key"] = toBase64(aes_manager.get_key());
-		aes_key_json["init_vector"] = toBase64(aes_manager.get_vector());
+		aes_key_json["id"] = get_aes_manager()->current_id;
+		aes_key_json["key"] = toBase64(get_aes_manager()->get_key());
+		aes_key_json["init_vector"] = toBase64(get_aes_manager()->get_vector());
+		aes_key_json["external_key"] = get_dh_manager()->key_to_base64_string(get_dh_manager()->get_key_generator()->get_external_key());
+		aes_key_json["pub_key"] = get_dh_manager()->key_to_base64_string(get_dh_manager()->get_key_generator()->get_public_key());
+		aes_key_json["p"] = get_dh_manager()->bignum_to_base64_string(get_dh_manager()->get_key_generator()->get_prime());
+		aes_key_json["g"] = get_dh_manager()->bignum_to_base64_string(get_dh_manager()->get_key_generator()->get_generator());
 
-		std::ofstream o("./" + std::to_string(dhm_id) + "/" + std::to_string(aes_manager.current_id) + ".json");
+		std::ofstream o("./" + std::to_string(dhm_id) + "/" + std::to_string(get_aes_manager()->current_id) + ".json");
 		o << std::setw(4) << aes_key_json << std::endl;
 
 		return 1;
 	}
 
 	int SessionManager::deserialize_aes_key(std::string path_to_config) {
-		if (!aes_manager.get_key() || !aes_manager.get_vector())
+		if (!get_aes_manager()->get_key() || !get_aes_manager()->get_vector())
 			return 0;
 		json aes_key_json;
 
@@ -812,15 +839,15 @@ namespace Network_n {
 
 		std::string tmp_key = aes_key_json["key"];
 		std::string tmp_vector = aes_key_json["init_vector"];
-		aes_manager.set_key((BYTE *)fromBase64((BYTE *)tmp_key.c_str()));
-		aes_manager.set_vector((BYTE*)fromBase64((BYTE*)tmp_vector.c_str()));
-		aes_manager.current_id = aes_key_json["id"];
+		get_aes_manager()->set_key((BYTE *)fromBase64((BYTE *)tmp_key.c_str()));
+		get_aes_manager()->set_vector((BYTE*)fromBase64((BYTE*)tmp_vector.c_str()));
+		get_aes_manager()->current_id = aes_key_json["id"];
 		
 		return 1;
 	}
 
 	int SessionManager::save_rsa_pkey_to_file(bool self) {
-		if (!dh_manager.rsa_manager.get_key())
+		if (!get_dh_manager()->get_rsa_manager()->get_key())
 			return 0;
 
 		std::string path_to_file;
@@ -829,11 +856,11 @@ namespace Network_n {
 		else
 			path_to_file = "./" + std::to_string(dhm_id) + "/" + "key.pem";
 
-		dh_manager.rsa_manager.write_private_key(path_to_file);
+		get_dh_manager()->get_rsa_manager()->write_private_key(path_to_file);
 		return 1;
 	}
 	int SessionManager::save_rsa_pubkey_to_file(bool self) {
-		if (!dh_manager.rsa_manager.get_key())
+		if (!get_dh_manager()->get_rsa_manager()->get_key())
 			return 0;
 
 		std::string path_to_file;
@@ -842,7 +869,7 @@ namespace Network_n {
 		else
 			path_to_file = "./" + std::to_string(dhm_id) + "/" + "key.pub";
 
-		dh_manager.rsa_manager.write_public_key(path_to_file);
+		get_dh_manager()->get_rsa_manager()->write_public_key(path_to_file);
 		return 1;
 	}
 }
@@ -908,6 +935,32 @@ char* toBase64(unsigned char* text) {
 
 }
 
+char* toBase64(unsigned char* text, int initial_len) {
+	/*int len_text = strlen((const char*)text);
+	//int len_encoded = 4 * ((len_text + 2) / 3) + 1;
+	//char* encoded_data = new char[len_encoded];
+	//EVP_EncodeBlock((unsigned char*)encoded_data, text, len_text);
+	////encoded_data[len_encoded - 1] = '\0';
+	//return encoded_data;*/
+
+	int success_flag = 0;
+	EVP_ENCODE_CTX* ctx;
+	ctx = EVP_ENCODE_CTX_new();
+	int len_text = initial_len;
+	int len_encoded = calculateBufferSize(len_text);
+	char* encoded_data = new char[len_encoded];
+	EVP_EncodeInit(ctx);
+	int dlen;
+	success_flag = EVP_EncodeUpdate(ctx, (unsigned char*)encoded_data, &dlen, text, len_text);
+	EVP_EncodeFinal(ctx, (unsigned char*)encoded_data + dlen, &dlen);
+	EVP_ENCODE_CTX_free(ctx);
+
+	if (dlen == 0 && !success_flag)
+		return (char*)text;
+	return encoded_data;
+
+}
+
 char* fromBase64(unsigned char* text) {
 	EVP_ENCODE_CTX* ctx;
 	ctx = EVP_ENCODE_CTX_new();
@@ -927,305 +980,21 @@ char* fromBase64(unsigned char* text) {
 	return decoded_data;
 }
 
-BYTE* aesEncrypt(unsigned char* res) {
-	EVP_CIPHER_CTX* ctx;
-	ctx = EVP_CIPHER_CTX_new();
-	int plain_text_len = strlen((char*)res);
-	int cipher_text_block_size = plain_text_len % AES_BLOCK_SIZE == 0 ? plain_text_len : (plain_text_len / AES_BLOCK_SIZE + 1) * AES_BLOCK_SIZE;
-
-	BYTE* cipher_text = new BYTE[cipher_text_block_size];
-
-	EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, key, init_vector);
-
-	int f_length, s_length;
-	EVP_EncryptUpdate(ctx, cipher_text, &f_length, res, plain_text_len);
-
-	if (f_length == strlen((char*)cipher_text))
-	{
-		BYTE* tmp_ptr = nullptr;
-		cipher_text = (BYTE*)realloc(cipher_text, cipher_text_block_size + AES_BLOCK_SIZE);
-		tmp_ptr = cipher_text + cipher_text_block_size;
-		memset(tmp_ptr, 0, AES_BLOCK_SIZE);
-	}
-	EVP_EncryptFinal_ex(ctx, cipher_text + f_length, &s_length);
-
-	if (uint64_t(f_length + s_length) < strlen((char*)cipher_text)) {
-		cipher_text = (BYTE*)realloc(cipher_text, f_length + s_length);
-		cipher_text[f_length + s_length] = '\0';
-	}
-	EVP_CIPHER_CTX_free(ctx);
-
-	return cipher_text;
-}
-
-BYTE* aesEncrypt(unsigned char* res, size_t size_of_plain_text) {
-	EVP_CIPHER_CTX* ctx;
-	ctx = EVP_CIPHER_CTX_new();
-	int plain_text_len = size_of_plain_text;
-	int cipher_text_block_size = plain_text_len % AES_BLOCK_SIZE == 0 ? plain_text_len : (plain_text_len / AES_BLOCK_SIZE + 1) * AES_BLOCK_SIZE;
-
-	BYTE* cipher_text = new BYTE[cipher_text_block_size];
-
-	EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, key, init_vector);
-
-	int f_length, s_length;
-	EVP_EncryptUpdate(ctx, cipher_text, &f_length, res, plain_text_len);
-
-	if (f_length == strlen((char*)cipher_text))
-	{
-		BYTE* tmp_ptr = nullptr;
-		cipher_text = (BYTE*)realloc(cipher_text, cipher_text_block_size + AES_BLOCK_SIZE);
-		tmp_ptr = cipher_text + cipher_text_block_size;
-		memset(tmp_ptr, 0, AES_BLOCK_SIZE);
-	}
-	EVP_EncryptFinal_ex(ctx, cipher_text + f_length, &s_length);
-
-	if (uint64_t(f_length + s_length) < strlen((char*)cipher_text)) {
-		cipher_text = (BYTE*)realloc(cipher_text, f_length + s_length);
-		cipher_text[f_length + s_length] = '\0';
-	}
-	EVP_CIPHER_CTX_free(ctx);
-
-	return cipher_text;
-}
-
-BYTE* aesDecrypt(unsigned char* res) {
-	int plain_text_len = strlen((char*)res);
-	BYTE* plain_text = new BYTE[plain_text_len];
-	EVP_CIPHER_CTX* ctx;
-	ctx = EVP_CIPHER_CTX_new();
-	EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, init_vector);
-	int f_length, s_length;
-	EVP_DecryptUpdate(ctx, plain_text, &f_length, res, plain_text_len);
-	EVP_DecryptFinal_ex(ctx, plain_text + f_length, &s_length);
-	plain_text = (BYTE*)realloc(plain_text, f_length + s_length);
-	plain_text[f_length + s_length] = '\0';
-
-	EVP_CIPHER_CTX_free(ctx);
-
-	return plain_text;
-}
-
-void aesDecrypt_inplace(BYTE* res, size_t size_of_plain_text) {
-	BYTE* plain_text = new BYTE[size_of_plain_text];
-	EVP_CIPHER_CTX* ctx;
-	ctx = EVP_CIPHER_CTX_new();
-	EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, init_vector);
-	int f_length, s_length;
-	EVP_DecryptUpdate(ctx, plain_text, &f_length, res, size_of_plain_text);
-	EVP_DecryptFinal_ex(ctx, plain_text + f_length, &s_length);
-	plain_text = (BYTE*)realloc(plain_text, f_length + s_length);
-	plain_text[f_length + s_length] = '\0';
-
-	EVP_CIPHER_CTX_free(ctx);
-	memcpy(res, plain_text, f_length + s_length);
-}
-
-void aesEncrypt_inplace(BYTE* res, size_t size_of_plain_text) {
-	EVP_CIPHER_CTX* ctx;
-	ctx = EVP_CIPHER_CTX_new();
-	int plain_text_len = size_of_plain_text;
-	int cipher_text_block_size = plain_text_len % AES_BLOCK_SIZE == 0 ? plain_text_len : (plain_text_len / AES_BLOCK_SIZE + 1) * AES_BLOCK_SIZE;
-
-	BYTE* cipher_text = new BYTE[cipher_text_block_size];
-
-	EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, key, init_vector);
-
-	int f_length, s_length;
-	EVP_EncryptUpdate(ctx, cipher_text, &f_length, (BYTE*)res, plain_text_len);
-
-	if (f_length == strlen((char*)cipher_text))
-	{
-		BYTE* tmp_ptr = nullptr;
-		cipher_text = (BYTE*)realloc(cipher_text, cipher_text_block_size + AES_BLOCK_SIZE);
-		tmp_ptr = cipher_text + cipher_text_block_size;
-		memset(tmp_ptr, 0, AES_BLOCK_SIZE);
-	}
-	EVP_EncryptFinal_ex(ctx, cipher_text + f_length, &s_length);
-
-	if (uint64_t(f_length + s_length) < strlen((char*)cipher_text)) {
-		cipher_text = (BYTE*)realloc(cipher_text, f_length + s_length);
-		cipher_text[f_length + s_length] = '\0';
-	}
-	EVP_CIPHER_CTX_free(ctx);
-
-	memcpy(res, cipher_text, f_length + s_length);
-	//delete[] cipher_text;
-}
-
-bool isServiceMessage(std::string message) {
-	std::string header = message.substr(0, 8);
-	if (header == "SERVICE_|")
-		return 1;
-	else
-		return 0;
-}
-
-int examineServiceMessage(std::string message) {
-	if (!isServiceMessage(message))
-		return 0;
-	std::string payload = message.substr(9, 8);
-	if (payload.find("DH INIT_") != std::string::npos) {
-		if (current_state != DH_n::States::WaitingForInit)
-			return 0;
-		else {
-			/*send message DH ACC__*/
-			current_state = DH_n::States::WaitingForGPA;
-			current_role = DH_n::Roles::Bob;
-			return 1;
-		}
-	}
-	else if (payload.find("DH ACC__")) {
-		if (current_state != DH_n::States::WaitingForInit || current_role == DH_n::Roles::Bob)
-			return 0;
-		else {
-			current_state = DH_n::States::WaitingForB;
-			std::tuple<EVP_PKEY*, EVP_PKEY*, BIGNUM*, BIGNUM*> tup = generate_DH_parameters();
-			EVP_PKEY* pub = std::get<0>(tup);
-			EVP_PKEY* priv = std::get<1>(tup);
-			BIGNUM* p = std::get<2>(tup);
-			BIGNUM* g = std::get<3>(tup);
-			/*send a*/
-			
-			return 1;
-		}
-	}
-	else if (payload.find("PGA NUM_")) {
-		if (current_state != DH_n::States::WaitingForGPA || current_role == DH_n::Roles::Alice)
-			return 0;
-		else {
-			/*get A*/
-			current_state = DH_n::States::KeyValid;
-			std::tuple<EVP_PKEY*, EVP_PKEY*, BIGNUM*, BIGNUM*> tup = generate_DH_parameters();
-			EVP_PKEY* pub = std::get<0>(tup);
-			EVP_PKEY* priv = std::get<1>(tup);
-			BIGNUM* p = std::get<2>(tup);
-			BIGNUM* g = std::get<3>(tup);
-			/*send b*/
-			unsigned char* K = generateSharedKey(pub, priv, p, g);
-			return 1;
-		}
-		
-	}
-	else if (payload.find("B NUM___")) {
-		if (current_state != DH_n::States::WaitingForB || current_role == DH_n::Roles::Bob)
-			return 0;
-		else {
-			/*get K*/
-			/*wait b*/
-			//unsigned char* K = generateSharedKey(pub, priv, p, g);
-			return 1;
-		}
-	}
-	else if (payload.find("DF END__")) {
-		if (current_state != DH_n::States::KeyValid)
-			return 0;
-		else {
-			/*obnulyai counter*/
-			return 1;
-		}
-	}
-	else {
-		return 0;
-	}
-}
-
-std::tuple<EVP_PKEY*, EVP_PKEY*, BIGNUM*, BIGNUM*> generate_DH_parameters() {
-	BIGNUM* big_add = BN_new();
-	BIGNUM* big_rem = BN_new();
-
-	BN_set_word(big_add, 24);
-	BN_set_word(big_rem, 23);
-
-	int priv_len = 2 * 112;
-	OSSL_PARAM params[3];
-	BIGNUM* prime;
-	BIGNUM* generator;
-	EVP_PKEY* pkey = NULL;
-
-	prime = BN_new();
-	generator = BN_new();
-	BN_set_word(big_add, 24);
-	BN_set_word(big_rem, 23);
-
-
-	EVP_PKEY_CTX* pctx = EVP_PKEY_CTX_new_from_name(NULL, "DH", NULL);
-
-	params[0] = OSSL_PARAM_construct_utf8_string("group", (char*)"ffdhe2048", 0);
-	params[1] = OSSL_PARAM_construct_int("priv_len", &priv_len);
-	params[2] = OSSL_PARAM_construct_end();
-
-	EVP_PKEY_keygen_init(pctx);
-	EVP_PKEY_CTX_set_params(pctx, params);
-	EVP_PKEY_generate(pctx, &pkey);
-
-	EVP_PKEY_get_bn_param(pkey, OSSL_PKEY_PARAM_FFC_P, &prime);
-	EVP_PKEY_get_bn_param(pkey, OSSL_PKEY_PARAM_FFC_G, &generator);
-
-	OSSL_PARAM_BLD* paramBuild = OSSL_PARAM_BLD_new();
-
-	// Set the prime and generator.
-	OSSL_PARAM_BLD_push_BN(paramBuild, OSSL_PKEY_PARAM_FFC_P, prime);
-	OSSL_PARAM_BLD_push_BN(paramBuild, OSSL_PKEY_PARAM_FFC_G, generator);
-	// Convert to OSSL_PARAM.
-	OSSL_PARAM* param = OSSL_PARAM_BLD_to_param(paramBuild);
-
-	// Create the context. The name is DHX not DH!!!
-	EVP_PKEY_CTX* domainParamKeyCtx = EVP_PKEY_CTX_new_from_name(nullptr, "DHX", nullptr);
-
-	// Initialize the context.
-	EVP_PKEY_fromdata_init(domainParamKeyCtx);
-	// Create the domain parameter key.
-	EVP_PKEY* domainParamKey = nullptr;
-	EVP_PKEY_fromdata(domainParamKeyCtx, &domainParamKey, EVP_PKEY_KEY_PARAMETERS, param);
-
-	EVP_PKEY_CTX* keyGenerationCtx = EVP_PKEY_CTX_new_from_pkey(nullptr, domainParamKey, nullptr);
-
-	EVP_PKEY_keygen_init(keyGenerationCtx);
-	EVP_PKEY* keyPair = nullptr;
-	EVP_PKEY_generate(keyGenerationCtx, &keyPair);
-
-	EVP_PKEY* publicKey = nullptr;
-	EVP_PKEY_keygen(keyGenerationCtx, &publicKey);
-
-	EVP_PKEY* privateKey = nullptr;
-	EVP_PKEY_keygen(keyGenerationCtx, &privateKey);
-
-	EVP_PKEY_CTX_free(pctx);
-	EVP_PKEY_CTX_free(domainParamKeyCtx);
-	EVP_PKEY_CTX_free(keyGenerationCtx);
-
-
-	std::tuple<EVP_PKEY*, EVP_PKEY*, BIGNUM*, BIGNUM*> tup = { publicKey, privateKey, prime, generator };
-	return tup;
-
-}
-
-unsigned char* generateSharedKey(EVP_PKEY* publicKey, EVP_PKEY* privateKey, BIGNUM* prime, BIGNUM* generator) {
-	//EVP_PKEY* peerPublicKey;
-
-	////CreatePeerPublicKey
-	//OSSL_PARAM_BLD* paramBuild = OSSL_PARAM_BLD_new(); 
-	//OSSL_PARAM_BLD_push_BN(paramBuild, OSSL_PKEY_PARAM_PUB_KEY, publicKey);
-	//OSSL_PARAM_BLD_push_BN(paramBuild, OSSL_PKEY_PARAM_FFC_P, prime);
-	//OSSL_PARAM_BLD_push_BN(paramBuild, OSSL_PKEY_PARAM_FFC_G, generator); 
-	//OSSL_PARAM* param = OSSL_PARAM_BLD_to_param(paramBuild);
-	//EVP_PKEY_CTX* peerPublicKeyCtx = EVP_PKEY_CTX_new_from_name(nullptr, "DHX", nullptr); 
-	//EVP_PKEY_fromdata_init(peerPublicKeyCtx);
-	//EVP_PKEY* peerPubKey = nullptr;
-	//EVP_PKEY_fromdata(peerPublicKeyCtx, &peerPubKey, EVP_PKEY_PUBLIC_KEY, param);
-	OSSL_PARAM_BLD * paramBuild = OSSL_PARAM_BLD_new();
-	OSSL_PARAM_BLD_push_BN(paramBuild, OSSL_PKEY_PARAM_FFC_P, prime);
-	OSSL_PARAM_BLD_push_BN(paramBuild, OSSL_PKEY_PARAM_FFC_G, generator); 
-	OSSL_PARAM* param = OSSL_PARAM_BLD_to_param(paramBuild);
-	EVP_PKEY_CTX* kctx = EVP_PKEY_CTX_new(publicKey, NULL);
-	EVP_PKEY_derive_init_ex(kctx, param);
-	EVP_PKEY_derive_set_peer(kctx, privateKey);
-	size_t shared_key_len;
-	unsigned char* shared_key = NULL;
-	EVP_PKEY_derive(kctx, NULL, &shared_key_len);
-	shared_key = (unsigned char*)OPENSSL_malloc(shared_key_len);
-	EVP_PKEY_derive(kctx, shared_key, &shared_key_len);
-	EVP_PKEY_CTX_free(kctx);
-	return shared_key; 
+char* fromBase64(unsigned char* text, int initial_size) {
+	EVP_ENCODE_CTX* ctx;
+	ctx = EVP_ENCODE_CTX_new();
+	int len_text = initial_size;
+	int len_decoded_data = (3 * len_text / 4) + 1;
+	char* decoded_data = new char[len_decoded_data];
+	EVP_DecodeInit(ctx);
+	int final_len;
+	int dlen;
+	if (-1 == EVP_DecodeUpdate(ctx, (unsigned char*)decoded_data, &dlen, text, len_text))
+		return (char*)text;
+	final_len = dlen;
+	EVP_DecodeFinal(ctx, (unsigned char*)decoded_data + final_len, &dlen);
+	final_len += dlen;
+	EVP_ENCODE_CTX_free(ctx);
+	decoded_data[final_len] = '\0';
+	return decoded_data;
 }

@@ -86,7 +86,7 @@ namespace DH_n {
 		int set_private_key(EVP_PKEY* new_private_key);
 		int set_public_key(EVP_PKEY* new_public_key);
 		int set_external_key(EVP_PKEY* new_external_key);
-
+		int set_key_pair(EVP_PKEY* new_key_pair);
 		int generate_DH_parameters();
 		BYTE* generateSharedKey();
 
@@ -97,6 +97,7 @@ namespace DH_n {
 		EVP_PKEY* private_key;
 		EVP_PKEY* public_key;
 		EVP_PKEY* external_public_key;
+		EVP_PKEY* key_pair;
 	};
 
 	class DiffieHellmanManager {
@@ -107,6 +108,8 @@ namespace DH_n {
 
 		States get_state() { return current_state; }
 		Roles get_role() { return current_role; }
+		KeyGenerator* get_key_generator() { return &key_generator; }
+		RSA_n::RsaManager* get_rsa_manager() { return &rsa_manager; }
 		void set_state(States new_state) { current_state = new_state; }
 		void set_role(Roles new_role) { current_role = new_role; }
 
@@ -202,10 +205,8 @@ namespace Service_n {
 	};
 }
 
-extern unsigned char key[32];
+//extern unsigned char key[32];
 extern unsigned char init_vector[16];
-extern DH_n::States current_state;
-extern DH_n::Roles current_role;
 
 extern std::map<uint64_t, Network_n::SessionManager *> global_session_managers;
 extern std::mutex global_session_managers_mutex;
@@ -213,19 +214,6 @@ extern std::mutex global_session_managers_mutex;
 // base64
 
 char* toBase64(unsigned char* text);
+char* toBase64(unsigned char* text, int initial_len);
 char* fromBase64(unsigned char* text);
-
-// AES
-
-BYTE* aesEncrypt(unsigned char* res);
-BYTE* aesEncrypt(unsigned char* res, size_t size_of_plain_text);
-void aesEncrypt_inplace(BYTE* res, size_t size_of_plain_text);
-
-BYTE* aesDecrypt(unsigned char* res);
-void aesDecrypt_inplace(BYTE* res, size_t size_of_plain_text);
-
-
-bool isServiceMessage(std::string message);
-int examineServiceMessage(std::string message);
-std::tuple<EVP_PKEY*, EVP_PKEY*, BIGNUM*, BIGNUM*> generate_DH_parameters();
-unsigned char* generateSharedKey(EVP_PKEY* publicKey, EVP_PKEY* privateKey, BIGNUM* prime, BIGNUM* generator);
+char* fromBase64(unsigned char* text, int initial_size);
