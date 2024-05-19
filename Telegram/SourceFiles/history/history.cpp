@@ -513,20 +513,23 @@ not_null<HistoryItem*> History::insertItem(
 
 	TextWithTags test;
 	test.text = result->originalText().text;
+	TimeId msg_date = result->date();
 
-
-	auto wait_thread = std::async(std::launch::async, handle, this->peer.get()->id.value, result->from().get()->id.value, test);
-	wait_thread.wait();
+	if (time(nullptr) - msg_date < 60) {
+		auto wait_thread = std::async(std::launch::async, handle, this->peer.get()->id.value, result->from().get()->id.value, test);
+		wait_thread.wait();
+	}
 
 	uint64_t tmp = this->peer.get()->id.value;
 	if (global_session_managers.count(tmp) != 0) {
-		if (global_session_managers[tmp]->get_aes_manager()->get_key() != nullptr) {
 			if (!global_session_managers[tmp]->is_service_message(test.text.toStdString())) {
+				std::string handled_msg = global_session_managers[tmp]->handle_encrypted_message(test.text.toStdString());
+				if (handled_msg == "")
+					goto End;
+				test.text = QString::fromStdString(handled_msg);
 				QByteArray ba = test.text.toLocal8Bit();
 				const unsigned char* res = (const unsigned char*)ba.data();
 
-				global_session_managers[tmp]->get_aes_manager()->current_id = 0;
-				global_session_managers[tmp]->serialize_aes_key();
 				char* decoded_data = nullptr;
 				decoded_data = fromBase64((unsigned char*)res);
 
@@ -542,7 +545,6 @@ not_null<HistoryItem*> History::insertItem(
 				delete[] out;
 				delete[] decoded_data;
 			}
-		}
 		else
 			goto End;
 	}

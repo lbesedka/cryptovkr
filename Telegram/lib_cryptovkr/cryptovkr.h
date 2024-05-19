@@ -174,11 +174,15 @@ namespace Network_n {
 
 		bool is_service_message(std::string message);
 		int handle_service_message(std::string message);
+		std::string handle_encrypted_message(std::string message);
+		std::string construct_encrypted_message(std::string message);
+
 		void reset_counters();
 		bool is_key_change_needed(std::time_t time_in_minutes, std::size_t size_in_megabytes);
 
 		int serialize_aes_key();
 		int deserialize_aes_key(std::string path_to_config);
+		int get_highest_aes_id();
 
 		int save_rsa_pkey_to_file(bool self);
 		int save_rsa_pubkey_to_file(bool self);

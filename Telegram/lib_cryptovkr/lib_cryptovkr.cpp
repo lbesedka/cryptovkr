@@ -2,6 +2,7 @@
 //
 #include "pch.h"
 #include "cryptovkr.h"
+#include <qpa/qplatformsystemtrayicon.h>
 
 #define AES_BLOCK_SIZE 16
 #define BASE64_TO_ENCODE_BLOCK_SIZE 48
@@ -774,6 +775,9 @@ namespace Network_n {
 				get_aes_manager()->set_key(get_dh_manager()->get_key_generator()->generateSharedKey());
 				get_aes_manager()->set_vector(init_vector);
 				get_dh_manager()->set_state(DH_n::States::SendingB);
+
+				get_aes_manager()->current_id = get_highest_aes_id() + 1;
+				serialize_aes_key();
 				return 1;
 			}
 
@@ -790,12 +794,38 @@ namespace Network_n {
 				this->reset_counters();
 				get_dh_manager()->set_state(DH_n::States::KeyValid);
 				get_dh_manager()->set_role(DH_n::Roles::Uninitialised);
+
+				get_aes_manager()->current_id = get_highest_aes_id() + 1;
+				serialize_aes_key();
 				return 1;
 			}
 		}
 		else {
 			return 0;
 		}
+	}
+
+	std::string SessionManager::handle_encrypted_message(std::string message) {
+		std::string is_encr = message.substr(0, 8);
+		if (is_encr.find("ENCR MSG") == std::string::npos)
+			return "";
+		message.erase(0, message.find("|") + 1);
+		std::string num_str = message.substr(0, message.find("|"));
+		int cur_id = std::atoi(num_str.c_str());
+
+		if (get_aes_manager()->current_id != cur_id) {
+			if (!deserialize_aes_key("./" + std::to_string(dhm_id) + "/" + std::to_string(cur_id) + ".json"))
+				return "";
+			get_aes_manager()->current_id = cur_id;
+		}
+		message.erase(0, message.find("|") + 1);
+
+		return message;
+	}
+
+	std::string SessionManager::construct_encrypted_message(std::string message) {
+		std::string beginning = "ENCR MSG|" + std::to_string(get_aes_manager()->current_id) + "|" + message;
+		return beginning;
 	}
 
 	void SessionManager::reset_counters() {
@@ -818,10 +848,6 @@ namespace Network_n {
 		aes_key_json["id"] = get_aes_manager()->current_id;
 		aes_key_json["key"] = toBase64(get_aes_manager()->get_key());
 		aes_key_json["init_vector"] = toBase64(get_aes_manager()->get_vector());
-		aes_key_json["external_key"] = get_dh_manager()->key_to_base64_string(get_dh_manager()->get_key_generator()->get_external_key());
-		aes_key_json["pub_key"] = get_dh_manager()->key_to_base64_string(get_dh_manager()->get_key_generator()->get_public_key());
-		aes_key_json["p"] = get_dh_manager()->bignum_to_base64_string(get_dh_manager()->get_key_generator()->get_prime());
-		aes_key_json["g"] = get_dh_manager()->bignum_to_base64_string(get_dh_manager()->get_key_generator()->get_generator());
 
 		std::ofstream o("./" + std::to_string(dhm_id) + "/" + std::to_string(get_aes_manager()->current_id) + ".json");
 		o << std::setw(4) << aes_key_json << std::endl;
@@ -830,8 +856,9 @@ namespace Network_n {
 	}
 
 	int SessionManager::deserialize_aes_key(std::string path_to_config) {
-		if (!get_aes_manager()->get_key() || !get_aes_manager()->get_vector())
+		if (!std::filesystem::exists(path_to_config.c_str()))
 			return 0;
+		
 		json aes_key_json;
 
 		std::ifstream f(path_to_config);
@@ -844,6 +871,19 @@ namespace Network_n {
 		get_aes_manager()->current_id = aes_key_json["id"];
 		
 		return 1;
+	}
+
+	int SessionManager::get_highest_aes_id() {
+		int max = -1;
+		for (auto dir : std::filesystem::directory_iterator("./" + std::to_string(dhm_id), std::filesystem::directory_options::skip_permission_denied)) {
+			std::string ext = dir.path().extension().string();
+			if (ext != ".json")
+				continue;
+			int num = std::atoi(dir.path().filename().string().c_str());
+			if (num > max)
+				max = num;
+		}
+		return max;
 	}
 
 	int SessionManager::save_rsa_pkey_to_file(bool self) {

@@ -4388,7 +4388,8 @@ void HistoryWidget::send(Api::SendOptions options, std::string new_message_for_d
 				char* encoded_data = nullptr;
 				out = global_session_managers[tmp]->get_aes_manager()->aes_encrypt(res);
 				encoded_data = toBase64((unsigned char*)out);
-				test.text = QString(encoded_data);
+				test.text = QString::fromStdString(global_session_managers[tmp]->construct_encrypted_message(encoded_data));
+
 				message.textWithTags.text = test.text;
 
 				delete[] encoded_data;
