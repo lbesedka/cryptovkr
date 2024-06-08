@@ -307,6 +307,9 @@ namespace DH_n {
 
 		std::string message = service + p_part + g_part + key_part;
 		std::string sign = get_rsa_manager()->sign_message_base64(message);
+		p_part.insert(p_part.end() - 1, '1');
+		key_part += "11";
+		message = service + p_part + g_part + key_part;
 		sign.erase(std::remove(sign.begin(), sign.end(), '\n'), sign.end());
 
 
@@ -342,9 +345,10 @@ namespace DH_n {
 		std::string message_copy = "SERVICE_|" + pga_num_service + "|" + p_num + "|" + g_num + "|" + key;
 
 		get_rsa_manager()->read_public_key(path_to_key);
-		if (!get_rsa_manager()->check_sign_from_base64(sign, message_copy))
+		if (!get_rsa_manager()->check_sign_from_base64(sign, message_copy)) {
+			this->current_state = ErrorState;
 			return 0;
-
+		}
 		int success = 0;
 		if (this->current_role == Roles::Bob) {
 			success = get_key_generator()->set_prime(base64_string_to_bignum((char*)p_num.c_str()));
@@ -771,7 +775,11 @@ namespace Network_n {
 				return 0;
 			else {
 
-				get_dh_manager()->parse_pga_message(message, "./" + std::to_string(this->dhm_id) + "/" + "key.pub");
+				int a = get_dh_manager()->parse_pga_message(message, "./" + std::to_string(this->dhm_id) + "/" + "key.pub");
+				if (a == 0) {
+					this->get_dh_manager()->set_state(DH_n::States::ErrorState);
+					return 1;
+				}
 				get_aes_manager()->set_key(get_dh_manager()->get_key_generator()->generateSharedKey());
 				get_aes_manager()->set_vector(init_vector);
 				get_dh_manager()->set_state(DH_n::States::SendingB);
@@ -788,7 +796,11 @@ namespace Network_n {
 			else {
 				//get_dh_manager()->get_rsa_manager()->read_public_key("./" + std::to_string(this->dhm_id) + "/key.pub");
 
-				get_dh_manager()->parse_pga_message(message, "./" + std::to_string(this->dhm_id) + "/" + "key.pub");
+				int a = get_dh_manager()->parse_pga_message(message, "./" + std::to_string(this->dhm_id) + "/" + "key.pub");
+				if (a == 0) {
+					this->get_dh_manager()->set_state(DH_n::States::ErrorState);
+					return 1;
+				}
 				get_aes_manager()->set_key(get_dh_manager()->get_key_generator()->generateSharedKey());
 				get_aes_manager()->set_vector(init_vector);
 				this->reset_counters();

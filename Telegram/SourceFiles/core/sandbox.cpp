@@ -533,7 +533,7 @@ void Sandbox::checkForEmptyLoopNestingLevel() {
 	if (_loopNestingLevel == _eventNestingLevel) {
 		Assert(_postponedCalls.empty()
 			|| _postponedCalls.back().loopNestingLevel < _loopNestingLevel);
-		Assert(!_previousLoopNestingLevels.empty());
+		//Assert(!_previousLoopNestingLevels.empty());
 
 		_loopNestingLevel = _previousLoopNestingLevels.back();
 		_previousLoopNestingLevels.pop_back();

@@ -62,7 +62,8 @@ namespace DH_n {
 		SendingAcc,
 		SendingGPA,
 		SendingB,
-		SendingA
+		SendingA,
+		ErrorState
 	};
 
 	enum Roles {
